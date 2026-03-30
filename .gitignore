@@ -180,3 +180,6 @@ alembic/versions/*.py
 
 # Local development
 .app.db
+
+# Documentation (local only)
+agent-service/docs/
