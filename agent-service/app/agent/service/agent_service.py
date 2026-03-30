@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.infra.agent_factory import create_Ling_Agent
 from app.agent.infra.llm_factory import get_llm
+from app.agent.tools.registry import get_all_tools, set_session_id
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
 
@@ -33,7 +34,11 @@ class AgentService:
         Args:
             tools: 工具列表（Langchain tools）
         """
-        self.tools = tools or []
+        # 使用注册表加载所有工具，外部传入的 tools 可追加
+        self.tools = get_all_tools()
+        if tools:
+            self.tools.extend(tools)
+
         self.agent = None
         self._initialize_agent()
     
@@ -122,6 +127,9 @@ Always be concise and direct in your responses."""
             return "抱歉，Agent 服务暂时不可用。请稍后重试。"
         
         try:
+            # 注入 session_id 到文件工具
+            set_session_id(session_id)
+
             # 构建消息上下文
             messages = self._build_messages(user_message, history)
             

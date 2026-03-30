@@ -183,3 +183,6 @@ alembic/versions/*.py
 
 # Documentation (local only)
 agent-service/docs/
+
+# Agent workspace (user uploaded files and generated outputs)
+agent-service/workspace/

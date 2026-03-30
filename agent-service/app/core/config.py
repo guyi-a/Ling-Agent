@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL: str = "qwen-max"
 
+    # Workspace Configuration
+    WORKSPACE_ROOT: str = "/tmp/ling-agent/workspace"
+
     # Memory Configuration
     MEMORY_MAX_TOKENS: int = 2000
 
