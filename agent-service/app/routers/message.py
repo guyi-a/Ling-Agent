@@ -1,5 +1,5 @@
 """
-消息管理路由
+消息管理路由（需要 JWT 认证）
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,49 +8,21 @@ from typing import List, Optional
 from app.database.session import get_db
 from app.crud.message import message_crud
 from app.crud.session import session_crud
-from app.schemas.message import MessageCreate, MessageResponse
+from app.schemas.message import MessageResponse
+from app.core.deps import get_current_user
+from app.models.user import User
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
 
-@router.post("/", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def create_message(
-    message_in: MessageCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    创建新消息
-    
-    - **session_id**: 必填，会话ID
-    - **role**: 必填，角色（user/assistant/system）
-    - **content**: 必填，消息内容
-    - **extra_data**: 可选，额外元数据
-    """
-    # 检查会话是否存在
-    session = await session_crud.get_by_id(db, message_in.session_id)
+async def _check_session_owner(session_id: str, current_user: User, db: AsyncSession):
+    """验证会话所属用户"""
+    session = await session_crud.get_by_id(db, session_id)
     if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {message_in.session_id} not found"
-        )
-    
-    message = await message_crud.create(db, message_in)
-    return message
-
-
-@router.get("/{message_id}", response_model=MessageResponse)
-async def get_message(
-    message_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """根据 message_id 获取消息"""
-    message = await message_crud.get_by_id(db, message_id)
-    if not message:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Message {message_id} not found"
-        )
-    return message
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+    if session.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
+    return session
 
 
 @router.get("/session/{session_id}", response_model=List[MessageResponse])
@@ -59,65 +31,35 @@ async def get_session_messages(
     skip: int = 0,
     limit: int = 100,
     role: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    获取会话的所有消息
-    
-    - **role**: 可选，筛选特定角色的消息（user/assistant/system）
-    """
-    # 检查会话是否存在
-    session = await session_crud.get_by_id(db, session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    messages = await message_crud.get_by_session(
-        db, session_id, skip=skip, limit=limit, role=role
-    )
-    return messages
+    """获取会话的所有消息（需要登录）"""
+    await _check_session_owner(session_id, current_user, db)
+    return await message_crud.get_by_session(db, session_id, skip=skip, limit=limit, role=role)
 
 
 @router.get("/session/{session_id}/latest", response_model=List[MessageResponse])
 async def get_latest_messages(
     session_id: str,
     count: int = 10,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取会话最新的 N 条消息"""
-    # 检查会话是否存在
-    session = await session_crud.get_by_id(db, session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    messages = await message_crud.get_latest_messages(db, session_id, count)
-    return messages
+    """获取会话最新 N 条消息（需要登录）"""
+    await _check_session_owner(session_id, current_user, db)
+    return await message_crud.get_latest_messages(db, session_id, count)
 
 
 @router.get("/session/{session_id}/history")
 async def get_conversation_history(
     session_id: str,
     limit: int = 50,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    获取会话历史（格式化为对话格式）
-    
-    返回格式适用于传递给 LLM
-    """
-    # 检查会话是否存在
-    session = await session_crud.get_by_id(db, session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
+    """获取格式化的对话历史（需要登录）"""
+    await _check_session_owner(session_id, current_user, db)
     history = await message_crud.get_conversation_history(db, session_id, limit)
     return {"session_id": session_id, "messages": history}
 
@@ -127,60 +69,39 @@ async def search_messages(
     session_id: str,
     keyword: str,
     limit: int = 20,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """在会话中搜索消息"""
-    # 检查会话是否存在
-    session = await session_crud.get_by_id(db, session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    messages = await message_crud.search_by_content(db, session_id, keyword, limit)
-    return messages
+    """搜索会话中的消息（需要登录）"""
+    await _check_session_owner(session_id, current_user, db)
+    return await message_crud.search_by_content(db, session_id, keyword, limit)
+
+
+@router.get("/{message_id}", response_model=MessageResponse)
+async def get_message(
+    message_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取单条消息（需要登录）"""
+    message = await message_crud.get_by_id(db, message_id)
+    if not message:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="消息不存在")
+    # 验证消息所属会话
+    await _check_session_owner(message.session_id, current_user, db)
+    return message
 
 
 @router.delete("/{message_id}")
 async def delete_message(
     message_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """删除消息"""
+    """删除消息（需要登录）"""
     message = await message_crud.get_by_id(db, message_id)
     if not message:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Message {message_id} not found"
-        )
-    
-    success = await message_crud.delete(db, message_id)
-    if success:
-        return {"status": "success", "message": f"Message {message_id} deleted"}
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete message"
-        )
-
-
-@router.delete("/session/{session_id}/all")
-async def delete_session_messages(
-    session_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """删除会话的所有消息"""
-    # 检查会话是否存在
-    session = await session_crud.get_by_id(db, session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    deleted_count = await message_crud.delete_by_session(db, session_id)
-    return {
-        "status": "success",
-        "message": f"Deleted {deleted_count} messages from session {session_id}"
-    }
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="消息不存在")
+    await _check_session_owner(message.session_id, current_user, db)
+    await message_crud.delete(db, message_id)
+    return {"status": "success", "message": f"消息 {message_id} 已删除"}

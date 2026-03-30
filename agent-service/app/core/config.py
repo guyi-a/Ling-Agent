@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
 
+    # JWT Configuration
+    JWT_SECRET_KEY: str = "change-this-secret-key-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
     class Config:
         env_file = ".env"
         extra = "ignore"

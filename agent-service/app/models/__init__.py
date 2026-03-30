@@ -4,6 +4,7 @@
 """
 from .base import Base
 from .user import User
+from .account import Account
 from .session import Session
 from .message import Message
 
@@ -11,6 +12,7 @@ from .message import Message
 __all__ = [
     "Base",
     "User",
+    "Account",
     "Session",
     "Message",
 ]

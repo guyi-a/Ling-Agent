@@ -1,17 +1,23 @@
 """
 FastAPI应用程序主入口
 """
-from fastapi import FastAPI
+import logging
+import traceback
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.database.session import engine, Base
+
+logger = logging.getLogger(__name__)
 
 # 导入模型以确保它们在数据库中创建
 from app.models import *
 
 # 导入路由
-from app.routers import user_router, session_router, message_router, chat_router
+from app.routers import auth_router, user_router, session_router, message_router, chat_router
 
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
@@ -30,6 +36,35 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# ───────────────────────── 全局异常处理器 ─────────────────────────
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """请求参数校验失败（422）"""
+    errors = [
+        {"field": ".".join(str(x) for x in e["loc"]), "message": e["msg"]}
+        for e in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"code": 422, "message": "请求参数错误", "errors": errors}
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """捕获所有未处理的异常（500）"""
+    logger.error(
+        f"Unhandled exception: {request.method} {request.url}\n"
+        f"{traceback.format_exc()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"code": 500, "message": "服务器内部错误，请稍后重试"}
+    )
+
+# ──────────────────────────────────────────────────────────────────
+
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +75,7 @@ app.add_middleware(
 )
 
 # 注册路由
+app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(session_router)
 app.include_router(message_router)

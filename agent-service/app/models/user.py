@@ -12,18 +12,19 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(100), unique=True, index=True, nullable=False)  # UUID 或设备ID
-    username = Column(String(100), index=True)  # 用户名（可选）
-    device_id = Column(String(100), index=True)  # Android 设备ID
-    device_model = Column(String(100))  # 设备型号
-    preferences = Column(Text)  # JSON 字符串存储用户偏好设置
+    user_id = Column(String(100), unique=True, index=True, nullable=False)
+    username = Column(String(100), index=True)
+    device_id = Column(String(100), index=True)
+    device_model = Column(String(100))
+    preferences = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_active_at = Column(DateTime, default=datetime.utcnow)  # 最后活跃时间
+    last_active_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
-    
+
     # 关系
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
-    
+    account = relationship("Account", back_populates="user", uselist=False)
+
     def __repr__(self):
         return f"<User(id={self.id}, user_id={self.user_id}, username={self.username})>"
