@@ -10,6 +10,9 @@ from app.database.session import engine, Base
 # 导入模型以确保它们在数据库中创建
 from app.models import *
 
+# 导入路由
+from app.routers import user_router, session_router, message_router, chat_router
+
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,8 +24,8 @@ async def lifespan(app: FastAPI):
 
 # 创建FastAPI应用实例
 app = FastAPI(
-    title="Agent Service",
-    description="智能体服务API",
+    title="Ling Agent Service",
+    description="Android 智能助手服务 API",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -36,15 +39,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 注册路由
+app.include_router(user_router)
+app.include_router(session_router)
+app.include_router(message_router)
+app.include_router(chat_router)
+
 # 根路径
 @app.get("/")
 async def root():
-    return {"message": "欢迎使用智能体服务API"}
+    return {
+        "message": "欢迎使用 Ling Agent Service API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "endpoints": {
+            "users": "/api/users",
+            "sessions": "/api/sessions",
+            "messages": "/api/messages",
+            "chat": "/api/chat"
+        }
+    }
 
 # 健康检查端点
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "port": settings.PORT}
+    return {
+        "status": "healthy", 
+        "port": settings.PORT,
+        "service": "Ling Agent Service"
+    }
 
 if __name__ == "__main__":
     import uvicorn
