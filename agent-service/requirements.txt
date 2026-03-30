@@ -1,3 +1,24 @@
 # Requirements for Agent Service
 
-# Add your Python dependencies here
+# Web framework
+fastapi==0.110.0
+uvicorn==0.29.0
+
+# Langchain
+langchain==1.2.13
+langchain-openai==1.1.2
+
+# Database
+sqlalchemy==2.0.29
+alembic==1.13.1
+aiosqlite==0.20.0
+
+# Environment variables
+python-dotenv==1.0.1
+pydantic-settings==2.2.1
+
+# Logging
+loguru==0.7.2
+
+# Utilities
+pydantic==2.7.4
