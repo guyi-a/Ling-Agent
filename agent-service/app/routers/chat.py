@@ -1,10 +1,13 @@
 """
 聊天对话路由 - 核心对话接口（需要 JWT 认证）
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, AsyncIterator
 from datetime import datetime
 import logging
 
@@ -35,28 +38,11 @@ class ChatResponse(BaseModel):
     is_new_session: bool
 
 
-@router.post("/", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    聊天接口（需要登录）
-    
-    流程：
-    1. JWT 认证 → 获取当前用户
-    2. 获取/创建会话
-    3. 保存用户消息
-    4. 调用 AgentService 生成回复（内部自动保存 tool + assistant 消息）
-    5. 返回结果
-    """
+async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSession):
+    """公共逻辑：获取或创建会话，保存用户消息，返回 (session, user_message, history, is_new)"""
     is_new_session = False
-
-    # 更新用户最后活跃时间
     await user_crud.update_last_active(db, current_user.user_id)
 
-    # 获取或创建会话
     if request.session_id:
         session = await session_crud.get_by_id(db, request.session_id)
         if not session:
@@ -65,26 +51,32 @@ async def chat(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
     else:
         from app.schemas.session import SessionCreate
+        from zoneinfo import ZoneInfo
         session = await session_crud.create(
             db,
-            SessionCreate(title=f"Chat at {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"),
+            SessionCreate(title=f"Chat at {datetime.now(ZoneInfo('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M')}"),
             current_user.user_id
         )
         is_new_session = True
-        logger.info(f"✓ 新会话已创建: {session.session_id}")
 
-    # 保存用户消息
     user_message = await message_crud.create(db, MessageCreate(
         session_id=session.session_id,
         role="user",
         content=request.message
     ))
-    logger.info(f"💬 用户消息已保存: {user_message.message_id}")
-
-    # 获取历史消息作为上下文
     history = await message_crud.get_conversation_history(db, session.session_id, limit=20)
+    return session, user_message, history, is_new_session
 
-    # 调用 AgentService
+
+@router.post("/", response_model=ChatResponse)
+async def chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """聊天接口（非流式，保留兼容）"""
+    session, user_message, history, is_new_session = await _prepare_session(request, current_user, db)
+
     try:
         agent_service = get_agent_service()
         if not agent_service.is_ready():
@@ -99,10 +91,9 @@ async def chat(
                 user_message=request.message,
                 history=history
             )
-            logger.info(f"🤖 Agent 响应已生成 ({len(assistant_response)} 字符)")
     except Exception as e:
         logger.error(f"❌ Agent 处理失败: {e}", exc_info=True)
-        assistant_response = f"处理消息时发生错误，请稍后重试。"
+        assistant_response = "处理消息时发生错误，请稍后重试。"
         await message_crud.create(db, MessageCreate(
             session_id=session.session_id, role="assistant", content=assistant_response
         ))
@@ -112,6 +103,63 @@ async def chat(
         user_message_id=user_message.message_id,
         assistant_response=assistant_response,
         is_new_session=is_new_session
+    )
+
+
+@router.post("/stream")
+async def chat_stream(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """SSE 流式聊天接口"""
+    session, user_message, history, is_new_session = await _prepare_session(request, current_user, db)
+
+    agent_service = get_agent_service()
+
+    def sse(event: str, data: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    async def generate() -> AsyncIterator[str]:
+        # 先推送会话元信息
+        yield sse("session", {
+            "session_id": session.session_id,
+            "user_message_id": user_message.message_id,
+            "is_new_session": is_new_session
+        })
+
+        if not agent_service.is_ready():
+            yield sse("token", {"text": "抱歉，AI 助手暂时不可用，请稍后重试。"})
+            yield sse("done", {})
+            return
+
+        try:
+            async for chunk in agent_service.stream_message(
+                db=db,
+                session_id=session.session_id,
+                user_message=request.message,
+                history=history
+            ):
+                chunk_type = chunk.get("type")
+                if chunk_type == "token":
+                    yield sse("token", {"text": chunk["text"]})
+                elif chunk_type == "tool_start":
+                    yield sse("tool_start", {"tool_name": chunk["tool_name"]})
+                elif chunk_type == "tool_end":
+                    yield sse("tool_end", {"tool_name": chunk["tool_name"]})
+                elif chunk_type == "done":
+                    yield sse("done", {})
+        except Exception as e:
+            logger.error(f"SSE stream error: {e}", exc_info=True)
+            yield sse("error", {"message": str(e)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
     )
 
 

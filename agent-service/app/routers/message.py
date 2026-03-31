@@ -58,10 +58,16 @@ async def get_conversation_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取格式化的对话历史（需要登录）"""
+    """获取前端展示用的对话历史（只含 user/assistant 可见消息）"""
     await _check_session_owner(session_id, current_user, db)
-    history = await message_crud.get_conversation_history(db, session_id, limit)
-    return {"session_id": session_id, "messages": history}
+    # 直接从 DB 取原始消息，过滤掉 tool 消息和无文字内容的 assistant 消息
+    raw = await message_crud.get_by_session(db, session_id, skip=0, limit=limit)
+    messages = [
+        {"role": m.role, "content": m.content}
+        for m in raw
+        if m.role in ("user", "assistant") and (m.content or "").strip()
+    ]
+    return {"session_id": session_id, "messages": messages}
 
 
 @router.get("/session/{session_id}/search", response_model=List[MessageResponse])

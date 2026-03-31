@@ -6,6 +6,7 @@ from .user import router as user_router
 from .session import router as session_router
 from .message import router as message_router
 from .chat import router as chat_router
+from .workspace import router as workspace_router
 
 __all__ = [
     "auth_router",
@@ -13,4 +14,5 @@ __all__ = [
     "session_router",
     "message_router",
     "chat_router",
+    "workspace_router",
 ]

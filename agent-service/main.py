@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+import os
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.database.session import engine, Base
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 from app.models import *
 
 # 导入路由
-from app.routers import auth_router, user_router, session_router, message_router, chat_router
+from app.routers import auth_router, user_router, session_router, message_router, chat_router, workspace_router
 
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
@@ -80,6 +82,12 @@ app.include_router(user_router)
 app.include_router(session_router)
 app.include_router(message_router)
 app.include_router(chat_router)
+app.include_router(workspace_router)
+
+# 挂载前端静态文件
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+if os.path.exists(frontend_dir):
+    app.mount("/ui", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 # 根路径
 @app.get("/")

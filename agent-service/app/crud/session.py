@@ -127,12 +127,22 @@ class SessionCRUD:
         return result.rowcount > 0
 
     async def hard_delete(self, db: AsyncSession, session_id: str) -> bool:
-        """硬删除会话（会级联删除所有消息）"""
-        result = await db.execute(
-            delete(Session).where(Session.session_id == session_id)
-        )
+        """硬删除会话（ORM cascade 级联删除所有消息，同时删除工作区目录）"""
+        session = await self.get_by_id(db, session_id)
+        if not session:
+            return False
+        await db.delete(session)
         await db.commit()
-        return result.rowcount > 0
+
+        # 删除工作区目录
+        import shutil
+        from pathlib import Path
+        from app.core.config import settings
+        workspace = Path(settings.WORKSPACE_ROOT) / session_id
+        if workspace.exists():
+            shutil.rmtree(workspace, ignore_errors=True)
+
+        return True
 
     async def count_by_user(
         self, 

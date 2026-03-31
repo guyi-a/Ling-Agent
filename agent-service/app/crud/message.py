@@ -3,7 +3,7 @@ Message CRUD 操作
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 import uuid
 import json
@@ -96,18 +96,55 @@ class MessageCRUD:
         limit: int = 50
     ) -> List[dict]:
         """
-        获取会话历史，返回格式化的对话历史
-        适用于传递给 LLM
+        获取会话历史，返回格式化的对话历史（适合传给 LangChain agent）
+        
+        - assistant 消息若含 tool_calls（存在 extra_data），重建为带 tool_calls 字段的消息
+        - tool 消息重建为带 tool_call_id 字段的消息
         """
         messages = await self.get_latest_messages(db, session_id, limit)
         
-        return [
-            {
-                "role": msg.role,
-                "content": msg.content,
-            }
-            for msg in messages
-        ]
+        result = []
+        for msg in messages:
+            extra = {}
+            if msg.extra_data:
+                try:
+                    extra = json.loads(msg.extra_data)
+                except Exception:
+                    pass
+
+            if msg.role == "tool":
+                tool_call_id = extra.get("tool_call_id", "")
+                tool_name = extra.get("tool_name", "unknown")
+                if not tool_call_id:
+                    continue
+                # 保底校验：前一条必须是带 tool_calls 的 assistant 消息
+                if not result or result[-1].get("role") != "assistant" or not result[-1].get("tool_calls"):
+                    continue
+                result.append({
+                    "role": "tool",
+                    "content": msg.content,
+                    "tool_call_id": tool_call_id,
+                    "name": tool_name,
+                })
+            elif msg.role == "assistant":
+                entry: Dict = {"role": "assistant", "content": msg.content}
+                tool_calls = extra.get("tool_calls")
+                if tool_calls:
+                    entry["tool_calls"] = [
+                        {
+                            "id": tc.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": tc.get("name", ""),
+                                "arguments": json.dumps(tc.get("args", {})),
+                            }
+                        }
+                        for tc in tool_calls
+                    ]
+                result.append(entry)
+            else:
+                result.append({"role": msg.role, "content": msg.content})
+        return result
 
     async def delete(self, db: AsyncSession, message_id: str) -> bool:
         """删除消息"""
