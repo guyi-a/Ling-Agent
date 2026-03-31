@@ -4,6 +4,15 @@ label: Markdown 转 PDF
 description: Convert Markdown to PDF using ReportLab (handle CJK characters, tables, charts, images)
 ---
 
+## ⚠️ PREREQUISITE: Load pdf-enhance skill first
+
+**CRITICAL**: Before proceeding with this skill, you MUST first call:
+```
+Skill(command="pdf-enhance")
+```
+
+The `pdf-enhance` skill contains **mandatory font configuration and layout rules** that apply to ALL PDF generation tasks. You must read and apply those rules during this conversion.
+
 ## Markdown → PDF Conversion (ReportLab)
 
 > **IMPORTANT**: You have loaded this skill. You MUST now immediately execute ALL steps in the workflow below using `run_command` and `python_repl`. Do NOT summarize this skill or describe what you will do — just do it now.
@@ -29,19 +38,17 @@ Use case: Convert local Markdown documents to PDF (**currently only supports md 
 
 ##### 2.1) Handling CJK Character Encoding (Required)
 
-ReportLab's default fonts typically do not include CJK (Chinese/Japanese/Korean) characters. Rendering CJK text without a proper font will produce garbled output or empty boxes.
+⚠️ **USE THE FONT CONFIGURATION FROM `pdf-enhance` SKILL** ⚠️
 
-Requirements:
+You have already loaded the `pdf-enhance` skill which provides the **complete font configuration code** for handling Chinese characters. 
 
-- Before generating the PDF, you **must** register and use a font that covers CJK characters (TTF / OTF / TTC).
-- Recommended fonts by platform:
-  - macOS: `PingFang SC` / `Heiti SC`
-  - Windows: `Microsoft YaHei` / `SimSun`
-  - Linux: `Noto Sans CJK`
-- If the runtime environment cannot guarantee the presence of a system font, ask the user to provide the absolute path to a font file.
-- Common font registration entry points:
-  - `reportlab.pdfbase.ttfonts.TTFont`
-  - `reportlab.pdfbase.pdfmetrics.registerFont(...)`
+**MANDATORY**: Copy the font configuration code block from `pdf-enhance` skill exactly as specified:
+- The code block starts with `# ========== 字体配置 - 必须放在最开头 ==========`
+- It registers `NotoSansSC.ttf` from `~/.ling-agent/fonts/`
+- It provides both matplotlib and reportlab font setup
+- **DO NOT modify or skip any part of that configuration**
+
+If you did not load `pdf-enhance` yet, stop and load it now before continuing.
 
 ##### 2.2) Rendering Tables, Bar Charts, Pie Charts, and Images
 
@@ -210,9 +217,16 @@ Combine parsing and rendering into a single executable script (e.g., `convert_md
 #### 4) Run the Conversion Script
 
 - Execute the script to produce the PDF
-- If layout overflow occurs (oversized tables, large images, long code blocks): adjust scaling, line-wrapping, or page-break strategies and retry
+- **Apply `pdf-enhance` layout rules**: Before finalizing, verify the PDF meets the quality standards defined in `pdf-enhance` skill:
+  - All text is readable and not clipped
+  - Proper spacing and semantic grouping
+  - Container relationships preserved
+  - No harmful content collisions
+- If layout overflow occurs (oversized tables, large images, long code blocks): adjust scaling, line-wrapping, or page-break strategies and retry following the fix priority order from `pdf-enhance`
 
 ### Layout Requirements (Clean and Readable)
+
+⚠️ **These requirements align with the `pdf-enhance` skill standards** ⚠️
 
 - Paper size: A4; recommended margins: 24–36 pt
 - Body font size: 12–14 pt; line spacing: 1.2–1.5×

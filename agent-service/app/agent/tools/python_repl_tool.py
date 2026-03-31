@@ -64,6 +64,7 @@ class PythonReplTool(BaseTool):
         "Execute a Python code snippet and return its output. "
         "The working directory is the session workspace, so you can read/write files there. "
         "Use this for data analysis, calculations, file processing, generating charts, etc. "
+        "The script will be saved to outputs/scripts/ for future reference. "
         "stdout and stderr are both captured and returned."
     )
     args_schema: Type[BaseModel] = _PythonReplInput
@@ -92,11 +93,20 @@ class PythonReplTool(BaseTool):
             cwd = Path(settings.WORKSPACE_ROOT).resolve()
             cwd.mkdir(parents=True, exist_ok=True)
 
-        # 将代码写入临时文件执行，避免 shell 转义问题
-        script_path = cwd / "_repl_tmp.py"
+        # 创建 scripts 目录用于保存执行的脚本
+        scripts_dir = cwd / "outputs" / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+
+        # 生成带时间戳的脚本文件名
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        timestamp = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d_%H%M%S")
+        script_path = scripts_dir / f"script_{timestamp}.py"
+
+        # 写入脚本文件并保存（不再删除）
         script_path.write_text(textwrap.dedent(code), encoding="utf-8")
 
-        logger.info(f"🐍 Run Python snippet in {cwd} ({len(code)} chars)")
+        logger.info(f"🐍 Run Python script: {script_path.relative_to(cwd)} ({len(code)} chars)")
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -114,26 +124,28 @@ class PythonReplTool(BaseTool):
             except asyncio.TimeoutError:
                 _kill_process(proc)
                 await proc.wait()
-                return f"Python code timed out after {timeout} seconds."
+                return f"Python code timed out after {timeout} seconds.\n\nScript saved: {script_path.relative_to(cwd)}"
             except asyncio.CancelledError:
                 _kill_process(proc)
                 await proc.wait()
                 raise
-        finally:
-            try:
-                script_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+        except Exception as e:
+            return f"Error executing script: {e}\n\nScript saved: {script_path.relative_to(cwd)}"
 
         stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
         stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
         exit_code = proc.returncode or 0
 
-        parts = [f"Exit code: {exit_code}"]
+        # 构建返回结果（包含脚本保存位置）
+        relative_path = script_path.relative_to(cwd)
+        parts = [
+            f"Script saved: {relative_path}",
+            f"Exit code: {exit_code}"
+        ]
         if stdout:
             parts.append(f"Output:\n{stdout}")
         if stderr:
             parts.append(f"Stderr:\n{stderr}")
 
-        logger.info(f"🐍 Python snippet finished (exit={exit_code})")
+        logger.info(f"🐍 Python script finished (exit={exit_code}, saved={relative_path})")
         return "\n\n".join(parts)

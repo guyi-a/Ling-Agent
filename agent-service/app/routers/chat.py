@@ -222,3 +222,27 @@ async def get_chat_history(
         "message_count": len(history),
         "messages": history
     }
+
+
+@router.post("/{session_id}/stop")
+async def stop_generation(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """停止指定会话的 Agent 生成（需要登录）"""
+    # 验证会话权限
+    session = await session_crud.get_by_id(db, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+    if session.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
+
+    # 尝试取消 Agent 执行
+    agent_service = get_agent_service()
+    cancelled = agent_service.cancel_session(session_id)
+
+    if cancelled:
+        return {"status": "ok", "message": "生成已停止"}
+    else:
+        return {"status": "not_running", "message": "该会话当前没有正在执行的任务"}

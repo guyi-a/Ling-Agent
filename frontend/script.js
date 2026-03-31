@@ -608,6 +608,16 @@ async function sendMessage() {
                         toolIndicator = null;
                     }
                     refreshWorkspacePanel();
+                } else if (event === 'cancelled') {
+                    contentEl.classList.remove('streaming-cursor');
+                    if (toolIndicator) {
+                        toolIndicator.classList.add('done');
+                        toolIndicator.querySelector('.tool-status').innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                        toolIndicator = null;
+                    }
+                    if (accumulated) contentEl.innerHTML = marked.parse(accumulated);
+                    contentEl.innerHTML += '<p style="color:#aaa;margin-top:8px"><i class="fa-solid fa-stop"></i> 已停止生成</p>';
+                    refreshWorkspacePanel();
                 } else if (event === 'done') {
                     contentEl.classList.remove('streaming-cursor');
                     if (accumulated) contentEl.innerHTML = marked.parse(accumulated);
@@ -633,6 +643,11 @@ async function sendMessage() {
     } catch (e) {
         if (e.name === 'AbortError') {
             contentEl.classList.remove('streaming-cursor');
+            if (toolIndicator) {
+                toolIndicator.classList.add('done');
+                toolIndicator.querySelector('.tool-status').innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                toolIndicator = null;
+            }
             contentEl.innerHTML += '<p style="color:#aaa"><i class="fa-solid fa-stop"></i> 已停止生成</p>';
         } else {
             console.error('SSE error:', e);
@@ -751,6 +766,27 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         sendMessage();
     });
+
+    // 停止按钮点击
+    const stopBtn = document.getElementById('stop-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (isStreaming && currentSessionId) {
+                try {
+                    // 先通知后端停止 Agent 执行
+                    await request(`/api/chat/${currentSessionId}/stop`, { method: 'POST' });
+                    console.log('已通知后端停止生成');
+                } catch (error) {
+                    console.error('停止请求失败:', error);
+                }
+                // 然后中止前端的 SSE 连接
+                if (streamAbortController) {
+                    streamAbortController.abort();
+                }
+            }
+        });
+    }
 
     // 回车键发送
     chatInput.addEventListener('keydown', (e) => {

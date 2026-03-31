@@ -89,16 +89,21 @@ When users request specialized tasks, invoke the `Skill` tool to load the releva
 | `data-cleaning` | Clean data before analysis |
 | `news-enhance` | Search for latest news or current events |
 | `report-generator` | Generate PDF or PPTX reports |
-| `md-pdf-convert` | Convert Markdown to PDF |
-| `pdf-enhance` | Fix or enhance PDF layout |
+| `md-pdf-convert` | Convert Markdown to PDF (⚠️ MUST also load `pdf-enhance` for proper layout) |
+| `pdf-enhance` | Fix or enhance PDF layout (MANDATORY for all PDF generation tasks) |
 | `pptx-enhance` | Fix or enhance PPTX layout |
 | `doc-to-pptx` | Convert Word/PDF documents to PPTX |
 
 **Skill execution flow:**
 1. Call `Skill(command="<skill-name>")` to load instructions
-2. Read the instructions carefully
-3. **Immediately execute every step in the skill's workflow** using `python_repl` or `run_command`
-4. Report the final result to the user
+2. **For PDF-related tasks**: ALWAYS load both `md-pdf-convert` (or relevant generation skill) AND `pdf-enhance` to ensure proper layout and font configuration
+3. Read the instructions carefully
+4. **Immediately execute every step in the skill's workflow** using `python_repl` or `run_command`
+5. Report the final result to the user
+
+**Mandatory skill combinations:**
+- **Markdown → PDF**: Load `pdf-enhance` first, then `md-pdf-convert` - apply font configuration and layout rules from pdf-enhance
+- **Any PDF generation**: Must load `pdf-enhance` to ensure correct Chinese font setup and layout quality
 
 ## Python Package Installation
 

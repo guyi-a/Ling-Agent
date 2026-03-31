@@ -5,6 +5,7 @@ Agent Service - Ling Assistant 核心服务
 import logging
 import re
 import json
+import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -35,7 +36,7 @@ class AgentService:
     def __init__(self, tools: List = None):
         """
         初始化 Agent Service
-        
+
         Args:
             tools: 工具列表（Langchain tools）
         """
@@ -46,6 +47,7 @@ class AgentService:
 
         self._prompt_template = self._load_system_prompt_template()
         self.agent = None
+        self._active_tasks: Dict[str, asyncio.Task] = {}  # 记录活跃的流式任务 {session_id: task}
         self._initialize_agent()
     
     def _initialize_agent(self):
@@ -279,11 +281,17 @@ Always be concise and direct in your responses."""
     ):
         """
         真流式输出，支持 HumanInTheLoop interrupt/resume。
+        支持通过 cancel_session() 中途取消。
         """
         if not self.agent:
             yield {"type": "token", "text": "抱歉，Agent 服务暂时不可用。"}
             yield {"type": "done"}
             return
+
+        # 注册当前任务
+        current_task = asyncio.current_task()
+        self._active_tasks[session_id] = current_task
+        logger.info(f"🚀 会话 {session_id[:8]}... 开始执行")
 
         set_session_id(session_id)
         rendered_prompt = self._render_system_prompt(session_id)
@@ -431,9 +439,38 @@ Always be concise and direct in your responses."""
             if full_response:
                 await self._save_assistant_message(db, session_id, full_response)
 
+        except asyncio.CancelledError:
+            logger.info(f"⛔ 会话 {session_id[:8]}... 被用户停止")
+
+            # 保存中断消息到数据库（保持历史记录完整）
+            interrupt_msg = "⚠️ 用户已停止生成"
+            if full_response:
+                # 如果有已生成的内容，保存部分内容 + 中断标记
+                await self._save_assistant_message(
+                    db, session_id,
+                    f"{full_response}\n\n{interrupt_msg}"
+                )
+            else:
+                # 没有内容，仅保存中断消息
+                await self._save_assistant_message(db, session_id, interrupt_msg)
+
+            yield {"type": "cancelled", "text": "生成已被停止"}
+
+            # 清理 checkpointer 状态
+            try:
+                await get_checkpointer().adelete_thread(session_id)
+            except Exception as e:
+                logger.error(f"清理 checkpointer 失败: {e}")
+            raise  # 重新抛出以正确终止任务
+
         except Exception as e:
             logger.error(f"stream_message error: {e}", exc_info=True)
             yield {"type": "token", "text": f"\n\n[错误: {e}]"}
+
+        finally:
+            # 清理活跃任务记录
+            self._active_tasks.pop(session_id, None)
+            logger.info(f"✅ 会话 {session_id[:8]}... 执行结束")
 
         yield {"type": "done"}
     
@@ -519,22 +556,49 @@ Always be concise and direct in your responses."""
     def get_status(self) -> Dict[str, Any]:
         """
         获取服务状态
-        
+
         Returns:
             状态信息字典
         """
         llm = get_llm()
-        
+
         return {
             "agent_ready": self.is_ready(),
             "llm_available": llm is not None,
             "tools_count": len(self.tools),
+            "active_sessions": len(self._active_tasks),
             "tools": [
-                {"name": getattr(tool, 'name', 'unknown'), 
+                {"name": getattr(tool, 'name', 'unknown'),
                  "description": getattr(tool, 'description', '')}
                 for tool in self.tools
             ] if self.tools else []
         }
+
+    def cancel_session(self, session_id: str) -> bool:
+        """
+        取消指定会话的 Agent 执行
+
+        Args:
+            session_id: 要取消的会话ID
+
+        Returns:
+            True 如果成功取消，False 如果会话不存在或未在执行
+        """
+        task = self._active_tasks.get(session_id)
+        if task and not task.done():
+            task.cancel()
+            logger.info(f"🛑 取消会话 {session_id[:8]}... 的执行")
+            return True
+        return False
+
+    def get_active_sessions(self) -> List[str]:
+        """
+        获取当前所有活跃会话ID
+
+        Returns:
+            活跃会话ID列表
+        """
+        return [sid for sid, task in self._active_tasks.items() if not task.done()]
 
 
 # 创建全局单例实例（暂时不加载工具）
