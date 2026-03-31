@@ -4,16 +4,19 @@ Agent Service - Ling Assistant 核心服务
 """
 import logging
 import re
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
+from langgraph.types import Command
 
-from app.agent.infra.agent_factory import create_Ling_Agent
+from app.agent.infra.agent_factory import create_Ling_Agent, get_checkpointer
 from app.agent.infra.llm_factory import get_llm
 from app.agent.tools.registry import get_all_tools, set_session_id
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
+from app.core.approval import request_approval, make_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -275,12 +278,7 @@ Always be concise and direct in your responses."""
         history: List[Dict[str, str]] = None
     ):
         """
-        真流式输出：逐 token yield，供 SSE 接口使用
-        yield 格式：
-          {"type": "token", "text": "..."}
-          {"type": "tool_start", "tool_name": "..."}
-          {"type": "tool_end",   "tool_name": "..."}
-          {"type": "done"}
+        真流式输出，支持 HumanInTheLoop interrupt/resume。
         """
         if not self.agent:
             yield {"type": "token", "text": "抱歉，Agent 服务暂时不可用。"}
@@ -290,82 +288,144 @@ Always be concise and direct in your responses."""
         set_session_id(session_id)
         rendered_prompt = self._render_system_prompt(session_id)
         messages = self._build_messages(user_message, history, rendered_prompt)
-        inputs = {"messages": messages}
+
+        # thread_id 用于 checkpointer 识别会话，每轮对话用 session_id
+        config = {"configurable": {"thread_id": session_id}}
 
         full_response = ""
-        current_round_text = ""  # 当前轮次的文字（工具调用后清空）
-        # 从 on_chat_model_stream 收集 tool_call chunks，组装 tool_calls
-        # 结构：{index: {"id": ..., "name": ..., "args": ""}}
+        current_round_text = ""
         tc_chunks: Dict[int, Dict] = {}
-        # 已存储的 ai tool call 消息对应的 tool_call_id 列表（顺序），供 on_tool_end 消费
-        pending_tool_call_ids: List[str] = []
+        pending_tool_call_ids: List[str] = []  # 本轮待执行的 tool_call id 列表
+        pending_tc_list: List[Dict] = []       # 本轮 tool_calls 完整信息（含 name/args）
+        executed_ids: List[str] = []           # 已收到 on_tool_start 的 id
+        last_round_saved_as_tool_call = False
+
+        # 当前运行的输入（首次是消息列表，resume 时是 Command）
+        run_input = {"messages": messages}
 
         try:
-            async for event in self.agent.astream_events(inputs, version="v2"):
-                kind = event.get("event", "")
-
-                if kind == "on_chat_model_start":
-                    # 新一轮模型调用开始，重置当前轮次文字，通知前端清空文字区域
-                    current_round_text = ""
-                    tc_chunks = {}
-                    yield {"type": "model_start"}
-
-                elif kind == "on_chat_model_stream":
-                    chunk = event.get("data", {}).get("chunk")
-                    if not chunk:
+            while True:
+                async for event in self.agent.astream_events(run_input, config=config, version="v2"):
+                    if not isinstance(event, dict):
                         continue
-                    # 收集普通文本 token
-                    text = getattr(chunk, 'content', '') or ''
-                    if text:
-                        current_round_text += text
-                        full_response += text
-                        yield {"type": "token", "text": text}
-                    # 收集 tool_call_chunks（增量片段）
-                    for tc in getattr(chunk, 'tool_call_chunks', []) or []:
-                        idx = tc.get('index', 0)
-                        if idx not in tc_chunks:
-                            tc_chunks[idx] = {"id": tc.get("id", ""), "name": tc.get("name", ""), "args": ""}
-                        else:
-                            if tc.get("id"):
-                                tc_chunks[idx]["id"] = tc["id"]
-                            if tc.get("name"):
-                                tc_chunks[idx]["name"] += tc["name"]
-                        tc_chunks[idx]["args"] += tc.get("args", "") or ""
+                    kind = event.get("event", "")
 
-                elif kind == "on_chat_model_end":
-                    # 组装完整 tool_calls 并存储 AI 消息
-                    if tc_chunks:
-                        import json as _json
-                        tc_list = []
-                        for idx in sorted(tc_chunks.keys()):
-                            tc = tc_chunks[idx]
-                            try:
-                                args = _json.loads(tc["args"]) if tc["args"] else {}
-                            except Exception:
-                                args = {}
-                            tc_list.append({"name": tc["name"], "args": args, "id": tc["id"]})
-                        await self._save_ai_tool_call_message(
-                            db, session_id,
-                            current_round_text,
-                            tc_list
-                        )
-                        # 把 id 列表存下来供 on_tool_end 按顺序消费
-                        pending_tool_call_ids = [tc["id"] for tc in tc_list]
+                    if kind == "on_chat_model_start":
+                        current_round_text = ""
                         tc_chunks = {}
+                        yield {"type": "model_start"}
 
-                elif kind == "on_tool_start":
-                    tool_name = event.get("name", "tool")
-                    yield {"type": "tool_start", "tool_name": tool_name}
+                    elif kind == "on_chat_model_stream":
+                        chunk = event.get("data", {}).get("chunk")
+                        if not chunk:
+                            continue
+                        # chunk 可能是对象也可能是 dict，兼容两种情况
+                        if isinstance(chunk, dict):
+                            text = chunk.get("content", "") or ""
+                            tcc_list = chunk.get("tool_call_chunks", []) or []
+                        else:
+                            text = getattr(chunk, "content", "") or ""
+                            tcc_list = getattr(chunk, "tool_call_chunks", []) or []
+                        if text:
+                            current_round_text += text
+                            full_response += text
+                            yield {"type": "token", "text": text}
+                        for tc in tcc_list:
+                            if isinstance(tc, dict):
+                                tc_id = tc.get("id", "")
+                                tc_name = tc.get("name", "")
+                                tc_args = tc.get("args", "") or ""
+                                tc_idx = tc.get("index", 0)
+                            else:
+                                tc_id = getattr(tc, "id", "")
+                                tc_name = getattr(tc, "name", "")
+                                tc_args = getattr(tc, "args", "") or ""
+                                tc_idx = getattr(tc, "index", 0)
+                            idx = tc_idx
+                            if idx not in tc_chunks:
+                                tc_chunks[idx] = {"id": tc_id, "name": tc_name, "args": tc_args}
+                            else:
+                                if tc_id: tc_chunks[idx]["id"] = tc_id
+                                if tc_name: tc_chunks[idx]["name"] += tc_name
+                                tc_chunks[idx]["args"] += tc_args
 
-                elif kind == "on_tool_end":
-                    tool_name = event.get("name", "tool")
-                    output = event.get("data", {}).get("output")
-                    result_text = str(output) if output is not None else ""
-                    # 消费 pending_tool_call_ids 里的第一个 id
-                    tool_call_id = pending_tool_call_ids.pop(0) if pending_tool_call_ids else ""
-                    if tool_call_id:
-                        await self._save_tool_message(db, session_id, tool_name, result_text, tool_call_id)
-                    yield {"type": "tool_end", "tool_name": tool_name}
+                    elif kind == "on_chat_model_end":
+                        if tc_chunks:
+                            tc_list = []
+                            for idx in sorted(tc_chunks.keys()):
+                                tc = tc_chunks[idx]
+                                try:
+                                    args = json.loads(tc["args"]) if tc["args"] else {}
+                                except Exception:
+                                    args = {}
+                                tc_list.append({"name": tc["name"], "args": args, "id": tc["id"]})
+                            await self._save_ai_tool_call_message(db, session_id, current_round_text, tc_list)
+                            pending_tool_call_ids = [tc["id"] for tc in tc_list]
+                            pending_tc_list = tc_list
+                            executed_ids = []
+                            tc_chunks = {}
+                            full_response = full_response[:-len(current_round_text)] if current_round_text else full_response
+                            last_round_saved_as_tool_call = True
+                        else:
+                            last_round_saved_as_tool_call = False
+
+                    elif kind == "on_tool_start":
+                        tool_name = event.get("name", "tool")
+                        # 把 pending 里的第一个 id 移到 executed（该工具已开始执行）
+                        if pending_tool_call_ids:
+                            executed_ids.append(pending_tool_call_ids.pop(0))
+                        yield {"type": "tool_start", "tool_name": tool_name}
+
+                    elif kind == "on_tool_end":
+                        tool_name = event.get("name", "tool")
+                        output = event.get("data", {}).get("output")
+                        result_text = str(output) if output is not None else ""
+                        tool_call_id = executed_ids.pop(0) if executed_ids else ""
+                        if tool_call_id:
+                            await self._save_tool_message(db, session_id, tool_name, result_text, tool_call_id)
+                        yield {"type": "tool_end", "tool_name": tool_name}
+
+                # 无 tool_call 轮次直接结束
+                if not last_round_saved_as_tool_call:
+                    break
+
+                # 有 tool_call 且 pending_tool_call_ids 仍非空 → 工具被 interrupt 拦截（on_tool_start 没触发）
+                if not pending_tool_call_ids:
+                    # 全部工具都执行了（on_tool_start 把 id 移走了），正常结束
+                    break
+
+                # interrupt 了：从 pending_tc_list 里取被拦截的工具信息
+                intercepted = pending_tc_list[len(pending_tc_list) - len(pending_tool_call_ids)]
+                tool_name = intercepted.get("name", "unknown")
+                tool_input = intercepted.get("args", {})
+
+                request_id = make_request_id()
+                yield {
+                    "type": "approval_required",
+                    "request_id": request_id,
+                    "tool_name": tool_name,
+                    "tool_input": tool_input,
+                }
+
+                approved = await request_approval(request_id)
+
+                if not approved:
+                    yield {"type": "approval_rejected", "tool_name": tool_name}
+                    # 手动存一条 tool 消息到 DB，让下次 history 完整（孤儿 assistant 消息有对应 tool）
+                    rejected_tool_call_id = pending_tool_call_ids[0] if pending_tool_call_ids else ""
+                    if rejected_tool_call_id:
+                        await self._save_tool_message(
+                            db, session_id, tool_name,
+                            "用户拒绝执行此操作，操作已取消。",
+                            rejected_tool_call_id
+                        )
+                    # 删除 checkpointer 里该 thread 的状态，彻底防止下次 session 重新 resume 旧中断
+                    await get_checkpointer().adelete_thread(session_id)
+                    # 不 resume，直接输出取消提示并结束
+                    yield {"type": "token", "text": f"好的，已取消 `{tool_name}` 操作。"}
+                    break
+                else:
+                    run_input = Command(resume={"decisions": [{"type": "approve"}]})
 
             # 保存最终 assistant 消息
             if full_response:

@@ -13,6 +13,19 @@ const newChatBtn = document.getElementById('new-chat-btn');
 const chatTitle = document.getElementById('chat-title');
 const usernameEl = document.getElementById('current-username');
 
+// 流式状态
+let isStreaming = false;
+let streamAbortController = null;
+
+function setStreamingState(streaming) {
+    isStreaming = streaming;
+    const stopBtn = document.getElementById('stop-btn');
+    sendBtn.style.display = streaming ? 'none' : '';
+    if (stopBtn) stopBtn.style.display = streaming ? '' : 'none';
+    chatInput.disabled = streaming;
+    if (!streaming) chatInput.focus();
+}
+
 // ==================== 工作区 Sidebar ====================
 
 function getFileIcon(name) {
@@ -137,6 +150,7 @@ async function downloadWsFile(folder, filename) {    const url = `/api/workspace
 
 const PREVIEW_EXTS = new Set(['pdf','png','jpg','jpeg','gif','webp','bmp','svg',
                                'txt','md','csv','json','py','js','ts','html','css','xml','yaml','yml','log']);
+const TEXT_PREVIEW_EXTS = new Set(['txt','md','csv','json','py','js','ts','html','css','xml','yaml','yml','log']);
 
 function isPreviewable(name) {
     const ext = (name.split('.').pop() || '').toLowerCase();
@@ -148,6 +162,16 @@ async function previewWsFile(folder, filename) {
     try {
         const res = await fetch(url, { headers: { 'Authorization': `Bearer ${currentToken}` } });
         if (!res.ok) { console.error('预览失败', res.status); return; }
+
+        const ext = (filename.split('.').pop() || '').toLowerCase();
+        if (TEXT_PREVIEW_EXTS.has(ext)) {
+            const buffer = await res.arrayBuffer();
+            const text = new TextDecoder('utf-8').decode(buffer);
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            window.open(URL.createObjectURL(blob), '_blank');
+            return;
+        }
+
         const blob = await res.blob();
         window.open(URL.createObjectURL(blob), '_blank');
     } catch (e) {
@@ -471,7 +495,7 @@ function appendMessage(role, content, animate = false) {
 // 发送消息（SSE 真流式）
 async function sendMessage() {
     const text = chatInput.value.trim();
-    if (!text) return;
+    if (!text || isStreaming) return;
 
     chatInput.value = '';
     chatInput.style.height = 'auto';
@@ -498,6 +522,9 @@ async function sendMessage() {
     let accumulated = '';
     let toolIndicator = null;
 
+    streamAbortController = new AbortController();
+    setStreamingState(true);
+
     try {
         const res = await fetch('/api/chat/stream', {
             method: 'POST',
@@ -505,12 +532,14 @@ async function sendMessage() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentToken}`
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: streamAbortController.signal
         });
 
         if (!res.ok) {
             contentEl.classList.remove('streaming-cursor');
             contentEl.innerHTML = '<p>请求失败，请检查网络或后端日志。</p>';
+            setStreamingState(false);
             return;
         }
 
@@ -546,12 +575,8 @@ async function sendMessage() {
                         refreshWorkspacePanel();
                     }
                 } else if (event === 'model_start') {
-                    // 新一轮模型推理开始：清空文字内容，保留工具卡片
-                    // 找到气泡里所有工具卡片，暂存
-                    const cards = Array.from(contentEl.querySelectorAll('.tool-indicator'));
-                    contentEl.innerHTML = '';
-                    cards.forEach(c => contentEl.appendChild(c));
-                    accumulated = '';
+                    // 新一轮模型推理开始：保留已有内容，继续累积
+                    scrollToBottom();
                 } else if (event === 'token') {
                     // token 到来时把工具卡片标记为完成，不移除（保留在气泡里）
                     if (toolIndicator) {
@@ -587,6 +612,18 @@ async function sendMessage() {
                     contentEl.classList.remove('streaming-cursor');
                     if (accumulated) contentEl.innerHTML = marked.parse(accumulated);
                     refreshWorkspacePanel();
+                } else if (event === 'approval_required') {
+                    // 暂停 stream，在气泡内嵌审批卡片
+                    contentEl.classList.remove('streaming-cursor');
+                    showApprovalCard(contentEl, parsed.request_id, parsed.tool_name, parsed.tool_input || {});
+                } else if (event === 'approval_rejected') {
+                    contentEl.classList.remove('streaming-cursor');
+                    const note = document.createElement('div');
+                    note.className = 'tool-indicator done';
+                    note.style.color = '#ff5f56';
+                    note.innerHTML = `<i class="fa-solid fa-ban tool-icon" style="color:#ff5f56"></i><span>已拒绝执行：${escapeHTML(parsed.tool_name)}</span>`;
+                    contentEl.appendChild(note);
+                    scrollToBottom();
                 } else if (event === 'error') {
                     contentEl.classList.remove('streaming-cursor');
                     contentEl.innerHTML += `<p style="color:#ff5f56">[错误] ${escapeHTML(parsed.message || '')}</p>`;
@@ -594,10 +631,78 @@ async function sendMessage() {
             }
         }
     } catch (e) {
-        console.error('SSE error:', e);
-        contentEl.classList.remove('streaming-cursor');
-        contentEl.innerHTML = '<p>网络错误，请稍后重试。</p>';
+        if (e.name === 'AbortError') {
+            contentEl.classList.remove('streaming-cursor');
+            contentEl.innerHTML += '<p style="color:#aaa"><i class="fa-solid fa-stop"></i> 已停止生成</p>';
+        } else {
+            console.error('SSE error:', e);
+            contentEl.classList.remove('streaming-cursor');
+            contentEl.innerHTML = '<p>网络错误，请稍后重试。</p>';
+        }
+    } finally {
+        setStreamingState(false);
     }
+}
+
+// 工具审批内嵌卡片（插入到当前 AI 气泡底部，不遮挡对话）
+function showApprovalCard(contentEl, requestId, toolName, toolInput) {
+    // 移除同一气泡里的旧卡片（防止重叠）
+    contentEl.querySelector('.approval-card')?.remove();
+
+    const toolLabel = getToolLabel(toolName);
+    const inputPreview = Object.keys(toolInput).length > 0
+        ? `<pre class="approval-args">${escapeHTML(JSON.stringify(toolInput, null, 2))}</pre>`
+        : '';
+
+    const card = document.createElement('div');
+    card.className = 'approval-card';
+    card.innerHTML = `
+        <div class="approval-card-header">
+            <i class="fa-solid fa-triangle-exclamation" style="color:#f5a623;font-size:12px"></i>
+            <span>需要授权</span>
+            <span class="approval-card-tool">
+                <i class="fa-solid ${toolLabel.icon}"></i> ${escapeHTML(toolLabel.text)}
+            </span>
+            <span class="approval-card-timer" data-remaining="60">⏱ 60s</span>
+        </div>
+        ${inputPreview}
+        <div class="approval-card-actions">
+            <button class="approval-btn reject">拒绝</button>
+            <button class="approval-btn approve">✅ 允许</button>
+        </div>
+    `;
+    contentEl.appendChild(card);
+    scrollToBottom();
+
+    const timerEl = card.querySelector('.approval-card-timer');
+    let remaining = 60;
+    const interval = setInterval(() => {
+        remaining--;
+        if (timerEl) timerEl.textContent = `⏱ ${remaining}s`;
+        if (remaining <= 0) {
+            clearInterval(interval);
+            sendApproval(false);
+        }
+    }, 1000);
+
+    function sendApproval(approved) {
+        clearInterval(interval);
+        // 替换卡片为结果提示
+        card.innerHTML = approved
+            ? `<div class="approval-card-result ok"><i class="fa-solid fa-circle-check"></i> 已允许</div>`
+            : `<div class="approval-card-result no"><i class="fa-solid fa-ban"></i> 已拒绝</div>`;
+        fetch('/api/chat/approve', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: JSON.stringify({ request_id: requestId, approved })
+        }).catch(e => console.error('approve error', e));
+    }
+
+    card.querySelector('.approval-btn.approve').addEventListener('click', () => sendApproval(true));
+    card.querySelector('.approval-btn.reject').addEventListener('click', () => sendApproval(false));
 }
 
 // 工具名映射为友好显示

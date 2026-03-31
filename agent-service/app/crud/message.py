@@ -12,22 +12,47 @@ from app.models.message import Message
 from app.schemas.message import MessageCreate
 
 
+def _drop_orphan_tool_calls(messages: List[dict]) -> List[dict]:
+    """
+    移除没有对应 tool 消息的孤儿 assistant[tool_calls] 消息（及其后的孤立 tool 消息）。
+    场景：审批拒绝 / 中断时，assistant 带 tool_calls 已存库，但 tool 消息没有存，
+    下次构建 history 时模型会报 "tool_calls must be followed by tool messages" 错误。
+    扫描全部消息，不只截末尾。
+    """
+    result = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            # 检查紧跟的是否有 tool 消息
+            j = i + 1
+            has_tool = j < len(messages) and messages[j].get("role") == "tool"
+            if not has_tool:
+                # 孤儿：跳过这条，同时跳过其后所有连续 tool 消息（理论上没有，但保险）
+                i += 1
+                while i < len(messages) and messages[i].get("role") == "tool":
+                    i += 1
+                continue
+        result.append(msg)
+        i += 1
+    return result
+
+
 class MessageCRUD:
     """消息数据库操作"""
 
     async def create(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         message_in: MessageCreate
     ) -> Message:
         """创建消息"""
         message_id = str(uuid.uuid4())
-        
-        # 处理 extra_data JSON
+
         extra_data_json = None
         if message_in.extra_data:
             extra_data_json = json.dumps(message_in.extra_data)
-        
+
         db_message = Message(
             message_id=message_id,
             session_id=message_in.session_id,
@@ -35,15 +60,14 @@ class MessageCRUD:
             content=message_in.content,
             extra_data=extra_data_json,
         )
-        
+
         db.add(db_message)
         await db.commit()
         await db.refresh(db_message)
-        
-        # 更新会话的 updated_at
+
         from app.crud.session import session_crud
         await session_crud.touch(db, message_in.session_id)
-        
+
         return db_message
 
     async def get_by_id(self, db: AsyncSession, message_id: str) -> Optional[Message]:
@@ -51,30 +75,27 @@ class MessageCRUD:
         result = await db.execute(
             select(Message).where(Message.message_id == message_id)
         )
-        return result.scalars().first()
+        return result.scalar_one_or_none()
 
     async def get_by_session(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         session_id: str,
         skip: int = 0,
         limit: int = 100,
         role: Optional[str] = None
     ) -> List[Message]:
-        """获取会话的所有消息"""
+        """获取会话的消息列表"""
         query = select(Message).where(Message.session_id == session_id)
-        
         if role:
             query = query.where(Message.role == role)
-        
-        query = query.offset(skip).limit(limit).order_by(Message.created_at.asc())
-        
+        query = query.order_by(Message.created_at.asc()).offset(skip).limit(limit)
         result = await db.execute(query)
         return result.scalars().all()
 
     async def get_latest_messages(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         session_id: str,
         count: int = 10
     ) -> List[Message]:
@@ -86,23 +107,23 @@ class MessageCRUD:
             .limit(count)
         )
         messages = result.scalars().all()
-        # 反转顺序，保持时间正序
         return list(reversed(messages))
 
     async def get_conversation_history(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         session_id: str,
         limit: int = 50
     ) -> List[dict]:
         """
         获取会话历史，返回格式化的对话历史（适合传给 LangChain agent）
-        
+
         - assistant 消息若含 tool_calls（存在 extra_data），重建为带 tool_calls 字段的消息
         - tool 消息重建为带 tool_call_id 字段的消息
+        - 过滤孤儿 assistant[tool_calls]（审批拒绝时没有对应 tool 消息）
         """
         messages = await self.get_latest_messages(db, session_id, limit)
-        
+
         result = []
         for msg in messages:
             extra = {}
@@ -144,6 +165,9 @@ class MessageCRUD:
                 result.append(entry)
             else:
                 result.append({"role": msg.role, "content": msg.content})
+
+        # 移除孤儿 assistant[tool_calls]（审批被拒绝时没有对应 tool 消息）
+        result = _drop_orphan_tool_calls(result)
         return result
 
     async def delete(self, db: AsyncSession, message_id: str) -> bool:
@@ -170,8 +194,8 @@ class MessageCRUD:
         return result.scalar() or 0
 
     async def search_by_content(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         session_id: str,
         keyword: str,
         limit: int = 20

@@ -17,6 +17,9 @@ from langchain.tools import BaseTool
 from app.agent.tools.file_tool import ReadFileTool, WriteFileTool, ListDirTool
 from app.agent.tools.web_tool import WebFetchTool, WebSearchTool
 from app.agent.tools.skill_tool import create_skill_tool
+from app.agent.tools.shell_tool import ShellTool
+from app.agent.tools.python_repl_tool import PythonReplTool
+from app.agent.tools.font_tool import InstallNotoSansSCTool
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,8 @@ logger = logging.getLogger(__name__)
 _read_file_tool = ReadFileTool()
 _write_file_tool = WriteFileTool()
 _list_dir_tool = ListDirTool()
+_shell_tool = ShellTool()
+_python_repl_tool = PythonReplTool()
 
 
 def set_session_id(session_id: str) -> None:
@@ -31,6 +36,8 @@ def set_session_id(session_id: str) -> None:
     _read_file_tool.current_session_id = session_id
     _write_file_tool.current_session_id = session_id
     _list_dir_tool.current_session_id = session_id
+    _shell_tool.current_session_id = session_id
+    _python_repl_tool.current_session_id = session_id
 
 
 def get_all_tools() -> List[BaseTool]:
@@ -39,6 +46,8 @@ def get_all_tools() -> List[BaseTool]:
 
     工具分组：
       - 文件工具：read_file, write_file, list_dir
+      - Shell 工具：run_command
+      - Python 工具：python_repl
       - Web 工具：web_fetch, web_search
       - Skills 工具：Skill（按需加载 SKILL.md 指令）
     """
@@ -46,6 +55,9 @@ def get_all_tools() -> List[BaseTool]:
         _read_file_tool,
         _write_file_tool,
         _list_dir_tool,
+        _shell_tool,
+        _python_repl_tool,
+        InstallNotoSansSCTool(),
         WebFetchTool(),
         WebSearchTool(),
     ]

@@ -11,6 +11,8 @@ from typing import Optional, AsyncIterator
 from datetime import datetime
 import logging
 
+from app.core.approval import resolve_approval
+
 from app.database.session import get_db
 from app.crud.session import session_crud
 from app.crud.message import message_crud
@@ -143,10 +145,20 @@ async def chat_stream(
                 chunk_type = chunk.get("type")
                 if chunk_type == "token":
                     yield sse("token", {"text": chunk["text"]})
+                elif chunk_type == "model_start":
+                    yield sse("model_start", {})
                 elif chunk_type == "tool_start":
                     yield sse("tool_start", {"tool_name": chunk["tool_name"]})
                 elif chunk_type == "tool_end":
                     yield sse("tool_end", {"tool_name": chunk["tool_name"]})
+                elif chunk_type == "approval_required":
+                    yield sse("approval_required", {
+                        "request_id": chunk["request_id"],
+                        "tool_name": chunk["tool_name"],
+                        "tool_input": chunk.get("tool_input", {}),
+                    })
+                elif chunk_type == "approval_rejected":
+                    yield sse("approval_rejected", {"tool_name": chunk["tool_name"]})
                 elif chunk_type == "done":
                     yield sse("done", {})
         except Exception as e:
@@ -161,6 +173,26 @@ async def chat_stream(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+class ApprovalRequest(BaseModel):
+    request_id: str
+    approved: bool
+
+
+@router.post("/approve")
+async def approve_tool(
+    body: ApprovalRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """工具审批接口：前端用户点击允许/拒绝后调用"""
+    found = resolve_approval(body.request_id, body.approved)
+    if not found:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="审批请求不存在或已超时"
+        )
+    return {"status": "ok", "approved": body.approved}
 
 
 @router.get("/status")

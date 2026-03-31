@@ -16,15 +16,15 @@ class Settings(BaseSettings):
     # LLM Configuration
     DASHSCOPE_API_KEY: Optional[str] = None
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL: str = "qwen-max"
+    LLM_MODEL: str = "qwen3.5-plus"
 
     # Workspace Configuration
-    WORKSPACE_ROOT: str = "/tmp/ling-agent/workspace"
+    WORKSPACE_ROOT: str = "./workspace"
 
     # Memory Configuration
     MEMORY_MAX_TOKENS: int = 2000
 
-    # Application
+    # Applicatio
     PORT: int = 9000
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"

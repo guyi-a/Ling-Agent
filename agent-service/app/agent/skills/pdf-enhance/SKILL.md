@@ -26,7 +26,7 @@ When English is requested, use default system fonts (Arial, Helvetica) instead o
 import matplotlib.font_manager as fm
 from pathlib import Path
 
-font_path = Path.home() / ".krow" / "fonts" / "NotoSansSC.ttf"
+font_path = Path.home() / ".ling-agent" / "fonts" / "NotoSansSC.ttf"
 fm.fontManager.addfont(str(font_path))
 
 import matplotlib.pyplot as plt  # 必须在 addfont 之后！
@@ -57,7 +57,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-_font_path = Path.home() / ".krow" / "fonts" / "NotoSansSC.ttf"
+_font_path = Path.home() / ".ling-agent" / "fonts" / "NotoSansSC.ttf"
 pdfmetrics.registerFont(TTFont('ChineseFont', str(_font_path)))
 PDF_FONT = 'ChineseFont'
 

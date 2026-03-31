@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def get_session_workspace(session_id: str) -> Path:
     """获取当前 session 的工作区目录，不存在则创建"""
-    workspace = Path(settings.WORKSPACE_ROOT) / session_id
+    workspace = Path(settings.WORKSPACE_ROOT).resolve() / session_id
     workspace.mkdir(parents=True, exist_ok=True)
     (workspace / "uploads").mkdir(exist_ok=True)
     (workspace / "outputs").mkdir(exist_ok=True)

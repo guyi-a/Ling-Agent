@@ -584,6 +584,90 @@ body {
 .tool-indicator.done .tool-icon { color: var(--text-secondary); }
 .tool-indicator.done .tool-status { color: #27c93f; }
 
+/* Approval inline card */
+.approval-card {
+    border: 1px solid #f5a62355;
+    border-radius: 8px;
+    background: rgba(245, 166, 35, 0.06);
+    padding: 8px 12px;
+    margin-top: 8px;
+    font-size: 12px;
+}
+
+.approval-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.approval-card-tool {
+    margin-left: auto;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.approval-card-timer {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: 6px;
+}
+
+.approval-args {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+    font-family: 'Monaco', 'Courier New', monospace;
+    max-height: 80px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.approval-card-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.approval-btn {
+    padding: 4px 12px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: opacity 0.15s;
+}
+
+.approval-btn:hover { opacity: 0.85; }
+
+.approval-btn.reject {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.approval-btn.approve {
+    background: #27c93f;
+    color: #000;
+}
+
+.approval-card-result {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 2px 0;
+}
+.approval-card-result.ok { color: #27c93f; }
+.approval-card-result.no { color: #ff5f56; }
+
 /* Input Area */
 .input-area {
     position: absolute;

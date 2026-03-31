@@ -6,6 +6,8 @@ description: Convert Markdown to PDF using ReportLab (handle CJK characters, tab
 
 ## Markdown → PDF Conversion (ReportLab)
 
+> **IMPORTANT**: You have loaded this skill. You MUST now immediately execute ALL steps in the workflow below using `run_command` and `python_repl`. Do NOT summarize this skill or describe what you will do — just do it now.
+
 Use case: Convert local Markdown documents to PDF (**currently only supports md → pdf**).
 
 ### Workflow (execute in order)

@@ -27,7 +27,7 @@ When English is requested, skip Chinese font configuration and use default matpl
 import matplotlib.font_manager as fm
 from pathlib import Path
 
-font_path = Path.home() / ".krow" / "fonts" / "NotoSansSC.ttf"
+font_path = Path.home() / ".ling-agent" / "fonts" / "NotoSansSC.ttf"
 fm.fontManager.addfont(str(font_path))
 
 import matplotlib.pyplot as plt  # 必须在 addfont 之后！
