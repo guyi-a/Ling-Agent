@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # LLM Configuration
     DASHSCOPE_API_KEY: Optional[str] = None
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL: str = "qwen3.5-plus"
+    LLM_MODEL: str = "qwen-vl-max"  # 多模态模型（支持图像+文本）
 
     # Workspace Configuration
     WORKSPACE_ROOT: str = "./workspace"

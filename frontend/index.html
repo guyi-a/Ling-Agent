@@ -13,11 +13,6 @@
         <!-- Left Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="window-controls">
-                    <span class="control close"></span>
-                    <span class="control minimize"></span>
-                    <span class="control maximize"></span>
-                </div>
                 <div class="sidebar-actions">
                     <button class="icon-btn" id="new-chat-btn" title="新对话"><i class="fa-regular fa-pen-to-square"></i></button>
                 </div>
@@ -49,7 +44,7 @@
             <header class="main-header">
                 <div class="header-title">
                     <h1 id="chat-title">新对话</h1>
-                    <span class="subtitle">内容由 AI 生成</span>
+                    <span class="subtitle" id="chat-subtitle">内容由 AI 生成</span>
                 </div>
             </header>
 
@@ -71,13 +66,18 @@
 
             <div class="input-area">
                 <div class="input-container">
+                    <!-- 附件预览区 -->
+                    <div class="attachments-preview" id="attachments-preview" style="display:none;"></div>
+
                     <div class="input-wrapper">
                         <textarea id="chat-input" placeholder="发消息与 AI 助手对话..." rows="1"></textarea>
                     </div>
                     <div class="input-toolbar">
                         <div class="toolbar-left">
+                            <button class="tool-btn" id="attach-image-btn" title="粘贴或拖拽图片"><i class="fa-solid fa-image"></i></button>
                             <button class="tool-btn" id="upload-btn" title="上传文件到工作区"><i class="fa-solid fa-plus"></i></button>
                             <input type="file" id="file-input" style="display:none" multiple>
+                            <input type="file" id="image-input" accept="image/*" style="display:none" multiple>
                         </div>
                         <div class="toolbar-right">
                             <button class="voice-btn" id="stop-btn" title="停止生成" style="display:none"><i class="fa-solid fa-stop"></i></button>
@@ -92,7 +92,6 @@
         <aside class="workspace-sidebar" id="workspace-sidebar">
             <div class="ws-header">
                 <span class="ws-title"><i class="fa-solid fa-folder-tree"></i> 工作区</span>
-                <button class="icon-btn" id="ws-refresh-btn" title="刷新工作区"><i class="fa-solid fa-rotate-right"></i></button>
             </div>
             <div class="ws-body" id="ws-body">
                 <div class="ws-empty">选择会话后查看文件</div>

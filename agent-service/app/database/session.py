@@ -9,7 +9,7 @@ from app.core.config import settings
 # 创建异步数据库引擎
 engine = create_async_engine(
     settings.DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///"),
-    echo=settings.DEBUG,
+    echo=False,  # 关闭 SQL 语句输出，减少日志噪音
     future=True
 )
 

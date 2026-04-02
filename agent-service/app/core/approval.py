@@ -19,7 +19,8 @@ from typing import Dict, Optional
 logger = logging.getLogger(__name__)
 
 # 默认审批超时（秒）
-DEFAULT_TIMEOUT = 60
+# 注意：前端倒计时显示 60s，后端设置 90s 留出网络延迟和时钟不同步的缓冲时间
+DEFAULT_TIMEOUT = 90
 
 # 高风险工具名单（需要人工审批，与 agent_factory.py 的 interrupt_on 保持同步）
 HIGH_RISK_TOOLS: set[str] = {

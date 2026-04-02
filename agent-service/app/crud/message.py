@@ -212,6 +212,39 @@ class MessageCRUD:
         )
         return result.scalars().all()
 
+    async def delete_after_timestamp(
+        self,
+        db: AsyncSession,
+        session_id: str,
+        timestamp: datetime,
+        include_equal: bool = True
+    ) -> int:
+        """
+        删除某时间点之后的所有消息
+
+        Args:
+            session_id: 会话ID
+            timestamp: 时间戳
+            include_equal: 是否包含时间戳相等的消息（默认包含）
+
+        Returns:
+            删除的消息数量
+        """
+        if include_equal:
+            query = delete(Message).where(
+                Message.session_id == session_id,
+                Message.created_at >= timestamp
+            )
+        else:
+            query = delete(Message).where(
+                Message.session_id == session_id,
+                Message.created_at > timestamp
+            )
+
+        result = await db.execute(query)
+        await db.commit()
+        return result.rowcount
+
 
 # 创建全局实例
 message_crud = MessageCRUD()

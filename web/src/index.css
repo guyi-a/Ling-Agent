@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  /* 隐藏滚动条但保持可滚动 */
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-auto {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .overflow-y-auto::-webkit-scrollbar,
+  .overflow-x-auto::-webkit-scrollbar,
+  .overflow-auto::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* 强制文本换行 */
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+
+  pre code {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+}

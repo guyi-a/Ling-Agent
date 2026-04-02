@@ -1,5 +1,5 @@
 // 配置项
-const API_BASE = ''; 
+const API_BASE = '';
 let currentToken = localStorage.getItem('access_token');
 let currentUsername = localStorage.getItem('username') || 'demouser';
 let currentSessionId = null;
@@ -16,6 +16,9 @@ const usernameEl = document.getElementById('current-username');
 // 流式状态
 let isStreaming = false;
 let streamAbortController = null;
+
+// 附件管理
+let pendingAttachments = []; // 待发送的附件 [{type, file, preview}]
 
 function setStreamingState(streaming) {
     isStreaming = streaming;
@@ -105,6 +108,12 @@ function renderWsSidebar(files) {
                                 data-folder="${escapeHTML(f.folder)}"
                                 data-name="${escapeHTML(f.name)}">${escapeHTML(f.name)}</span>
                             <span class="ws-file-size-text">${formatSize(f.size)}</span>
+                            <button class="ws-file-ref-btn" title="引用到对话"
+                                data-folder="${escapeHTML(f.folder)}"
+                                data-name="${escapeHTML(f.name)}"
+                                data-size="${f.size}">
+                                <i class="fa-solid fa-paperclip"></i>
+                            </button>
                             <button class="ws-file-dl-btn" title="下载"
                                 data-folder="${escapeHTML(f.folder)}"
                                 data-name="${escapeHTML(f.name)}">
@@ -126,6 +135,10 @@ function renderWsSidebar(files) {
 
         folderEl.querySelectorAll('.ws-previewable').forEach(span => {
             span.addEventListener('click', () => previewWsFile(span.dataset.folder, span.dataset.name));
+        });
+
+        folderEl.querySelectorAll('.ws-file-ref-btn').forEach(btn => {
+            btn.addEventListener('click', () => referenceFile(btn.dataset.folder, btn.dataset.name, parseInt(btn.dataset.size)));
         });
 
         body.appendChild(folderEl);
@@ -336,9 +349,13 @@ function startRename(item, sessionId, currentTitle) {
                 body: JSON.stringify({ title: newTitle })
             });
             if (res.ok) {
-                // 更新顶部标题
+                // 更新顶部标题和副标题
                 if (sessionId === currentSessionId) {
                     chatTitle.textContent = newTitle;
+                    const chatSubtitle = document.getElementById('chat-subtitle');
+                    if (chatSubtitle) {
+                        chatSubtitle.textContent = newTitle;
+                    }
                 }
             } else {
                 span.textContent = currentTitle; // 回滚
@@ -396,6 +413,13 @@ async function deleteSession(sessionId, item) {
             if (sessionId === currentSessionId) {
                 currentSessionId = null;
                 chatTitle.textContent = '新对话';
+
+                // 更新副标题
+                const chatSubtitle = document.getElementById('chat-subtitle');
+                if (chatSubtitle) {
+                    chatSubtitle.textContent = '内容由 AI 生成';
+                }
+
                 chatMessages.innerHTML = '';
                 const wsBody = document.getElementById('ws-body');
                 if (wsBody) wsBody.innerHTML = '<div class="ws-empty">选择会话后查看文件</div>';
@@ -412,7 +436,13 @@ async function deleteSession(sessionId, item) {
 async function loadChatHistory(sessionId, title) {
     currentSessionId = sessionId;
     chatTitle.textContent = title || '历史对话';
-    
+
+    // 更新副标题
+    const chatSubtitle = document.getElementById('chat-subtitle');
+    if (chatSubtitle) {
+        chatSubtitle.textContent = title || '历史对话';
+    }
+
     // 更新侧边栏 active 状态
     document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
     event?.currentTarget?.classList.add('active');
@@ -495,13 +525,25 @@ function appendMessage(role, content, animate = false) {
 // 发送消息（SSE 真流式）
 async function sendMessage() {
     const text = chatInput.value.trim();
-    if (!text || isStreaming) return;
+    // 如果没有文字也没有附件，不发送
+    if ((!text && pendingAttachments.length === 0) || isStreaming) return;
 
     chatInput.value = '';
     chatInput.style.height = 'auto';
 
     const welcomeMsg = document.getElementById('welcome-message');
     if (welcomeMsg) welcomeMsg.style.display = 'none';
+
+    // 上传附件并获取路径
+    let attachments = null;
+    if (pendingAttachments.length > 0) {
+        attachments = await uploadAttachments(pendingAttachments);
+        if (!attachments) {
+            alert('附件上传失败');
+            return;
+        }
+        clearAttachments(); // 清空已上传的附件
+    }
 
     appendMessage('user', text);
 
@@ -518,6 +560,7 @@ async function sendMessage() {
 
     const payload = { message: text };
     if (currentSessionId) payload.session_id = currentSessionId;
+    if (attachments) payload.attachments = attachments;
 
     let accumulated = '';
     let toolIndicator = null;
@@ -700,20 +743,35 @@ function showApprovalCard(contentEl, requestId, toolName, toolInput) {
         }
     }, 1000);
 
-    function sendApproval(approved) {
+    async function sendApproval(approved) {
         clearInterval(interval);
         // 替换卡片为结果提示
         card.innerHTML = approved
             ? `<div class="approval-card-result ok"><i class="fa-solid fa-circle-check"></i> 已允许</div>`
             : `<div class="approval-card-result no"><i class="fa-solid fa-ban"></i> 已拒绝</div>`;
-        fetch('/api/chat/approve', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`
-            },
-            body: JSON.stringify({ request_id: requestId, approved })
-        }).catch(e => console.error('approve error', e));
+
+        try {
+            const res = await fetch('/api/chat/approve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                body: JSON.stringify({ request_id: requestId, approved })
+            });
+
+            if (!res.ok) {
+                // 审批请求失败（可能已超时）
+                if (res.status === 404) {
+                    card.innerHTML = `<div class="approval-card-result no"><i class="fa-solid fa-clock"></i> 审批已超时</div>`;
+                } else {
+                    card.innerHTML = `<div class="approval-card-result no"><i class="fa-solid fa-exclamation-triangle"></i> 审批请求失败</div>`;
+                }
+            }
+        } catch (e) {
+            console.error('approve error', e);
+            card.innerHTML = `<div class="approval-card-result no"><i class="fa-solid fa-exclamation-triangle"></i> 网络错误</div>`;
+        }
     }
 
     card.querySelector('.approval-btn.approve').addEventListener('click', () => sendApproval(true));
@@ -814,18 +872,291 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 右侧工作区 sidebar：刷新按钮
-    const wsRefreshBtn = document.getElementById('ws-refresh-btn');
-    if (wsRefreshBtn) {
-        wsRefreshBtn.addEventListener('click', () => refreshWorkspacePanel());
-    }
-
     // 新建对话
     newChatBtn.addEventListener('click', () => {
         currentSessionId = null;
         chatTitle.textContent = '新对话';
+
+        // 更新副标题
+        const chatSubtitle = document.getElementById('chat-subtitle');
+        if (chatSubtitle) {
+            chatSubtitle.textContent = '内容由 AI 生成';
+        }
+
         chatMessages.innerHTML = '';
         document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
         const wsBody = document.getElementById('ws-body');
         if (wsBody) wsBody.innerHTML = '<div class="ws-empty">选择会话后查看文件</div>';
+
+        // 清空附件
+        clearAttachments();
     });
+
+    // ==================== 多模态支持 ====================
+    setupMultimodal();
 });
+
+// ========== 多模态功能 ==========
+
+function setupMultimodal() {
+    const attachImageBtn = document.getElementById('attach-image-btn');
+    const imageInput = document.getElementById('image-input');
+
+    // 点击图片按钮选择图片
+    if (attachImageBtn) {
+        attachImageBtn.addEventListener('click', () => imageInput.click());
+    }
+
+    // 选择图片后处理
+    if (imageInput) {
+        imageInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    addAttachment(file, 'image');
+                }
+            });
+            imageInput.value = ''; // 清空，允许重复选择同一文件
+        });
+    }
+
+    // 粘贴图片
+    chatInput.addEventListener('paste', (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) {
+                    addAttachment(file, 'image');
+                }
+            }
+        }
+    });
+
+    // 拖拽图片到输入框
+    const inputWrapper = document.querySelector('.input-wrapper');
+    if (inputWrapper) {
+        inputWrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            inputWrapper.style.background = 'rgba(64, 169, 255, 0.1)';
+        });
+
+        inputWrapper.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            inputWrapper.style.background = 'none';
+        });
+
+        inputWrapper.addEventListener('drop', (e) => {
+            e.preventDefault();
+            inputWrapper.style.background = 'none';
+
+            const files = Array.from(e.dataTransfer.files);
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    addAttachment(file, 'image');
+                }
+            });
+        });
+    }
+}
+
+// 添加附件
+function addAttachment(file, type = 'image') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const attachment = {
+            type: type,
+            file: file,
+            preview: e.target.result,
+            id: Date.now() + Math.random()
+        };
+        pendingAttachments.push(attachment);
+        renderAttachments();
+    };
+    reader.readAsDataURL(file);
+}
+
+// 引用工作区文件（添加到附件列表，但使用 path 而非 file 对象）
+async function referenceFile(folder, filename, size) {
+    if (!currentSessionId) {
+        alert('请先创建会话');
+        return;
+    }
+
+    const filePath = `${folder}/${filename}`;
+
+    // 检查是否已经引用过该文件
+    const alreadyReferenced = pendingAttachments.some(att =>
+        att.isReference && att.path === filePath
+    );
+
+    if (alreadyReferenced) {
+        console.log('文件已引用:', filePath);
+        return;
+    }
+
+    try {
+        // 获取文件用于预览
+        const url = `/api/workspace/${currentSessionId}/files/${folder}/${encodeURIComponent(filename)}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${currentToken}` } });
+        if (!res.ok) {
+            console.error('获取文件失败', res.status);
+            return;
+        }
+
+        const blob = await res.blob();
+        const isImage = blob.type.startsWith('image/');
+
+        // 创建预览
+        let preview = '';
+        if (isImage) {
+            preview = URL.createObjectURL(blob);
+        } else {
+            // 非图片文件显示文件图标
+            preview = ''; // 可以添加一个通用文件图标
+        }
+
+        const attachment = {
+            type: isImage ? 'image' : 'file',
+            path: filePath,  // 直接使用已存在的路径
+            preview: preview,
+            filename: filename,
+            size: size,
+            id: Date.now() + Math.random(),
+            isReference: true  // 标记为引用，不是新上传
+        };
+
+        pendingAttachments.push(attachment);
+        renderAttachments();
+    } catch (e) {
+        console.error('引用文件失败', e);
+    }
+}
+
+// 渲染附件预览
+function renderAttachments() {
+    const previewContainer = document.getElementById('attachments-preview');
+    if (!previewContainer) return;
+
+    if (pendingAttachments.length === 0) {
+        previewContainer.style.display = 'none';
+        previewContainer.innerHTML = '';
+        return;
+    }
+
+    previewContainer.style.display = 'flex';
+    previewContainer.innerHTML = '';
+
+    pendingAttachments.forEach((att) => {
+        const item = document.createElement('div');
+        item.className = 'attachment-item';
+        item.dataset.attachmentId = att.id; // 使用唯一 ID 而非 index
+
+        // 如果是图片且有预览，显示图片
+        if (att.preview && (att.type === 'image' || att.preview.startsWith('blob:'))) {
+            item.innerHTML = `
+                <img src="${att.preview}" alt="附件">
+                <button class="remove-btn" title="移除"><i class="fa-solid fa-xmark"></i></button>
+            `;
+        } else {
+            // 文件引用显示文件图标和名称
+            item.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;background:var(--hover-bg);padding:4px;">
+                    <i class="fa-solid fa-file" style="font-size:20px;color:var(--text-secondary);"></i>
+                    <span style="font-size:9px;color:var(--text-secondary);margin-top:2px;text-align:center;word-break:break-all;max-width:100%;overflow:hidden;text-overflow:ellipsis;">${att.filename || 'file'}</span>
+                </div>
+                <button class="remove-btn" title="移除"><i class="fa-solid fa-xmark"></i></button>
+            `;
+        }
+
+        // 使用事件委托，通过 ID 查找并删除
+        item.querySelector('.remove-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const attachmentId = att.id;
+            const idx = pendingAttachments.findIndex(a => a.id === attachmentId);
+            if (idx !== -1) {
+                pendingAttachments.splice(idx, 1);
+                renderAttachments();
+            }
+        });
+
+        previewContainer.appendChild(item);
+    });
+}
+
+// 清空附件
+function clearAttachments() {
+    pendingAttachments = [];
+    renderAttachments();
+}
+
+// 上传附件到服务器
+async function uploadAttachments(attachments) {
+    // 如果没有 session，需要等待创建（通过第一次发送消息触发）
+    // 这里我们采用简化方案：暂存附件，等 session 创建后再上传
+    if (!currentSessionId) {
+        console.log('No session yet, will upload with first message');
+        // 返回本地预览路径，后续在 SSE 回调中获取 session_id 后再上传
+        // 简化：这里直接返回空，依赖消息创建 session
+        return null;
+    }
+
+    const uploaded = [];
+
+    for (const att of attachments) {
+        try {
+            // 如果是引用（已存在于工作区），直接使用路径
+            if (att.isReference) {
+                uploaded.push({
+                    type: att.type,
+                    path: att.path,
+                    mime_type: att.type === 'image' ? 'image/*' : 'application/octet-stream',
+                    size: att.size
+                });
+                console.log('Referenced:', att.path);
+                continue;
+            }
+
+            // 否则上传新文件
+            const formData = new FormData();
+            // 重命名文件：paste_时间戳.扩展名
+            const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0];
+            const ext = att.file.name.split('.').pop() || 'png';
+            const newFileName = `paste_${timestamp}.${ext}`;
+
+            // 用新文件名创建新的 File 对象
+            const renamedFile = new File([att.file], newFileName, { type: att.file.type });
+            formData.append('file', renamedFile);
+
+            const res = await fetch(`/api/workspace/${currentSessionId}/upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                uploaded.push({
+                    type: att.type,
+                    path: data.path,
+                    mime_type: att.file.type,
+                    size: data.size
+                });
+                console.log('Uploaded:', data.path);
+            } else {
+                console.error('Upload failed:', res.status);
+                return null;
+            }
+        } catch (e) {
+            console.error('Upload error:', e);
+            return null;
+        }
+    }
+
+    return uploaded.length > 0 ? uploaded : null;
+}

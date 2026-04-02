@@ -2,29 +2,24 @@
 
 > 一个功能完整、工程化的 AI Agent 生产力工具 - 支持流式对话、技能加载、工具审批、工作区管理
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-latest-green.svg)](https://github.com/langchain-ai/langgraph)
-
 ## ✨ 核心特性
 
 ### 🎯 对话系统
 - **真流式输出** - 基于 SSE 的 token-level 流式响应
+- **多模态支持** - qwen-vl-max 模型，支持图像+文本输入
 - **会话管理** - 支持多会话并行，历史记录持久化
 - **停止生成** - 实时取消执行，保存中断记录
 - **JWT 认证** - 用户认证与会话隔离
 
-### 🛠️ Skills 系统（8 个专业技能）
+### 🛠️ Skills 系统（5 个专业技能）
 | Skill | 功能 |
 |-------|------|
-| `data-analysis` | 数据分析、统计摘要 |
-| `data-visualize` | 生成图表（折线图、柱状图、散点图等） |
+| `data-analysis` | 数据分析、可视化图表（折线图、柱状图、散点图等） |
 | `data-cleaning` | 数据清洗与预处理 |
-| `news-enhance` | 实时新闻搜索 |
-| `report-generator` | 生成 PDF/PPTX 报告 |
-| `md-pdf-convert` | Markdown 转 PDF（支持中文） |
-| `pdf-enhance` | PDF 布局修复与优化 |
-| `pptx-enhance` | PPTX 布局修复与优化 |
+| `news-enhance` | 实时新闻搜索增强 |
+| `report-generator` | 从数据生成分析报告（PDF/PPTX，带图表和洞察） |
+| `md-pdf-convert` | Markdown 文件转 PDF |
+| `doc-to-pptx` | Word/PDF 转 PPTX |
 
 ### 🔧 工具集成
 - **文件操作** - read_file、write_file、list_dir（工作区隔离）
@@ -40,7 +35,10 @@
 ### 📁 工作区管理
 ```
 workspace/{session_id}/
-├── uploads/          # 用户上传文件
+├── uploads/          # 用户上传文件（支持图片、CSV、PDF 等）
+│   ├── paste_*.png   # 粘贴的图片
+│   ├── data.csv      # 上传的数据
+│   └── report.pdf    # 上传的文档
 └── outputs/
     ├── scripts/      # Python 脚本历史
     ├── *.csv         # 生成的数据文件
@@ -48,6 +46,11 @@ workspace/{session_id}/
     ├── *.pdf         # 生成的报告
     └── *.pptx        # 生成的演示文稿
 ```
+
+**多模态能力：**
+- 📸 **图片理解** - 直接"看到"图片内容（OCR、图表识别、场景理解）
+- 📎 **文件引用** - 引用工作区文件，Agent 智能读取和处理
+- 🔄 **历史记忆** - 对话中的图片和文件引用自动保存
 
 ## 🚀 快速开始
 
@@ -75,17 +78,33 @@ cp .env.example .env
 
 ### 启动服务
 
-```bash
-# 启动后端（默认端口 9000）
-cd agent-service
-uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
+#### 方式一：一键启动（推荐）
 
-# 启动前端（任意 HTTP 服务器）
-cd frontend
-python -m http.server 8080
+```bash
+./start-dev.sh
 ```
 
-访问 `http://localhost:8080` 开始使用！
+#### 方式二：分别启动
+
+**后端服务：**
+```bash
+cd agent-service
+source venv/bin/activate  
+uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+```
+
+**前端服务（新版）：**
+```bash
+cd web
+npm install  # 首次运行需要安装依赖
+npm run dev
+```
+
+访问：
+- 🎨 **现代前端**: http://localhost:5173 （React + TypeScript + Tailwind CSS）
+- 📄 **经典前端**: http://localhost:8080 （原生 HTML/CSS/JS - 启动方式：`cd frontend && python -m http.server 8080`）
+- 🔧 **后端 API**: http://localhost:9000
+- 📖 **API 文档**: http://localhost:9000/docs
 
 ## 📖 使用示例
 
@@ -102,6 +121,17 @@ python -m http.server 8080
 ### 3️⃣ 代码执行
 ```
 用 Python 计算斐波那契数列前 20 项并保存到 outputs/fib.txt
+```
+
+### 4️⃣ 图像分析（多模态）
+```
+[粘贴一张图表截图]
+帮我提取这个图表中的数据并转换为 CSV
+```
+
+### 5️⃣ 文件引用
+```
+对比 @sales_chart.png 和 @sales_data.csv，分析趋势是否一致
 ```
 
 ## 🏗️ 技术架构
@@ -137,7 +167,7 @@ Ling-Agent/
 │   │   ├── agent/          # Agent 核心
 │   │   │   ├── infra/      # LLM、Agent 工厂
 │   │   │   ├── prompts/    # 系统提示词
-│   │   │   ├── skills/     # Skills 模块（8个）
+│   │   │   ├── skills/     # Skills 模块（6个）
 │   │   │   └── tools/      # 工具集成（8个）
 │   │   ├── core/           # 配置、依赖注入、审批逻辑
 │   │   ├── crud/           # 数据库操作
@@ -146,10 +176,20 @@ Ling-Agent/
 │   │   └── schemas/        # Pydantic 模型
 │   ├── workspace/          # 工作区（运行时生成）
 │   └── app.db              # SQLite 数据库
-├── frontend/               # 前端
+├── web/                    # 现代前端（React + TypeScript）✨
+│   ├── src/
+│   │   ├── api/           # API 客户端
+│   │   ├── components/    # React 组件
+│   │   ├── pages/         # 页面组件
+│   │   ├── stores/        # Zustand 状态管理
+│   │   └── types/         # TypeScript 类型
+│   ├── vite.config.ts     # Vite 配置
+│   └── package.json
+├── frontend/               # 经典前端（原生 HTML/CSS/JS）
 │   ├── index.html
 │   ├── style.css
 │   └── script.js
+├── start-dev.sh           # 一键启动脚本
 └── README.md
 ```
 

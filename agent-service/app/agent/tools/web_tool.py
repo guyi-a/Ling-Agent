@@ -84,21 +84,27 @@ class WebFetchTool(BaseTool):
 
 
 class WebSearchTool(BaseTool):
-    """使用 DuckDuckGo 搜索网页（无需 API Key）"""
+    """网页搜索工具（推荐使用浏览器工具获得更好的搜索体验）"""
     name: str = "web_search"
     description: str = (
-        "Search the web using DuckDuckGo and return a list of results with titles, URLs, and snippets. "
-        "Use this for general web searches, finding information, or locating resources."
+        "Search the web and return a list of results. "
+        "NOTE: This tool uses a simple search API that may have limited results or be slow in some regions. "
+        "For better search experience, consider using the browser_use tool with the browser-use skill instead."
     )
     args_schema: Type[BaseModel] = _WebSearchInput
 
     def _run(self, query: str, max_results: int = 5) -> str:
+        # 简化实现：建议用户使用浏览器工具
+        logger.warning(f"⚠️  web_search called for '{query}' - consider using browser_use instead")
+
         try:
             import urllib.request
             import urllib.parse
             import json
 
             max_results = min(max_results, 10)
+
+            # 尝试 DuckDuckGo API（可能在某些地区不可用）
             params = urllib.parse.urlencode({
                 "q": query,
                 "format": "json",
@@ -111,7 +117,9 @@ class WebSearchTool(BaseTool):
                 url,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; LingAgent/1.0)"}
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+
+            # 缩短超时时间，快速失败
+            with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
             results = []
@@ -133,13 +141,29 @@ class WebSearchTool(BaseTool):
                     )
 
             if not results:
-                return f"No results found for: {query}"
+                # 返回建议使用浏览器工具
+                return (
+                    f"⚠️ No results found for: {query}\n\n"
+                    f"💡 Suggestion: For better search results, use the browser-use skill:\n"
+                    f"1. Load the skill: Skill(command='browser-use')\n"
+                    f"2. Open a search engine: browser_use('open https://www.baidu.com')\n"
+                    f"3. Perform the search interactively"
+                )
 
             logger.info(f"🔍 Web search: '{query}' ({len(results)} results)")
             return f"Search results for '{query}':\n\n" + "\n\n".join(results)
 
         except Exception as e:
-            return f"Error searching '{query}': {e}"
+            logger.error(f"web_search failed: {e}")
+            # 搜索失败时，建议使用浏览器工具
+            return (
+                f"⚠️ Search failed: {e}\n\n"
+                f"💡 Recommendation: Use the browser-use skill for reliable web searching:\n"
+                f"1. Load the skill: Skill(command='browser-use')\n"
+                f"2. Open a search engine: browser_use('open https://www.baidu.com')\n"
+                f"3. Search for '{query}' interactively\n\n"
+                f"This provides better results and works in all regions."
+            )
 
     async def _arun(self, query: str, max_results: int = 5) -> str:
         return self._run(query, max_results)

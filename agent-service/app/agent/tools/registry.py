@@ -20,6 +20,7 @@ from app.agent.tools.skill_tool import create_skill_tool
 from app.agent.tools.shell_tool import ShellTool
 from app.agent.tools.python_repl_tool import PythonReplTool
 from app.agent.tools.font_tool import InstallNotoSansSCTool
+from app.agent.tools.browser_tool import InstallBrowserUseTool, BrowserUseTool
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,8 @@ _write_file_tool = WriteFileTool()
 _list_dir_tool = ListDirTool()
 _shell_tool = ShellTool()
 _python_repl_tool = PythonReplTool()
+_install_browser_use_tool = InstallBrowserUseTool()
+_browser_use_tool = BrowserUseTool()
 
 
 def set_session_id(session_id: str) -> None:
@@ -38,6 +41,7 @@ def set_session_id(session_id: str) -> None:
     _list_dir_tool.current_session_id = session_id
     _shell_tool.current_session_id = session_id
     _python_repl_tool.current_session_id = session_id
+    _browser_use_tool.current_session_id = session_id
 
 
 def get_all_tools() -> List[BaseTool]:
@@ -48,6 +52,7 @@ def get_all_tools() -> List[BaseTool]:
       - 文件工具：read_file, write_file, list_dir
       - Shell 工具：run_command
       - Python 工具：python_repl
+      - 浏览器工具：install_browser_use, browser_use
       - Web 工具：web_fetch, web_search
       - Skills 工具：Skill（按需加载 SKILL.md 指令）
     """
@@ -57,6 +62,8 @@ def get_all_tools() -> List[BaseTool]:
         _list_dir_tool,
         _shell_tool,
         _python_repl_tool,
+        _install_browser_use_tool,
+        _browser_use_tool,
         InstallNotoSansSCTool(),
         WebFetchTool(),
         WebSearchTool(),

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-from typing import Optional, AsyncIterator
+from typing import Optional, AsyncIterator, List, Dict, Any
 from datetime import datetime
 import logging
 
@@ -26,10 +26,58 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
 
 
+def _validate_attachments(attachments: List[Dict[str, Any]]) -> bool:
+    """
+    验证附件列表的安全性
+
+    检查：
+    1. 路径不能包含 ..（防止目录遍历）
+    2. 路径必须在 uploads/ 或 outputs/ 下
+    3. 类型必须是 image 或 file
+
+    Returns:
+        True if valid, raises HTTPException otherwise
+    """
+    if not attachments:
+        return True
+
+    for att in attachments:
+        att_type = att.get("type")
+        att_path = att.get("path", "")
+
+        # 验证类型
+        if att_type not in ["image", "file"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid attachment type: {att_type}"
+            )
+
+        # 验证路径（防止目录遍历）
+        if ".." in att_path or att_path.startswith("/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid attachment path: path traversal detected"
+            )
+
+        # 路径必须在允许的目录下
+        allowed_prefixes = ["uploads/", "outputs/"]
+        if not any(att_path.startswith(prefix) for prefix in allowed_prefixes):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Attachment path must start with 'uploads/' or 'outputs/': {att_path}"
+            )
+
+    return True
+
+
 class ChatRequest(BaseModel):
     """聊天请求"""
     message: str = Field(..., description="用户消息")
     session_id: Optional[str] = Field(None, description="会话ID（不提供则自动创建新会话）")
+    attachments: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="附件列表（图片等），格式: [{type: 'image', path: 'uploads/img.png'}]"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -42,6 +90,9 @@ class ChatResponse(BaseModel):
 
 async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSession):
     """公共逻辑：获取或创建会话，保存用户消息，返回 (session, user_message, history, is_new)"""
+    # 验证附件安全性
+    _validate_attachments(request.attachments)
+
     is_new_session = False
     await user_crud.update_last_active(db, current_user.user_id)
 
@@ -61,10 +112,20 @@ async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSe
         )
         is_new_session = True
 
+    # 构建 extra_data（包含附件信息）
+    extra_data = {}
+    if request.attachments:
+        extra_data["attachments"] = request.attachments
+        logger.info(
+            f"💬 用户消息包含 {len(request.attachments)} 个附件 "
+            f"(session: {session.session_id[:8]}...)"
+        )
+
     user_message = await message_crud.create(db, MessageCreate(
         session_id=session.session_id,
         role="user",
-        content=request.message
+        content=request.message,
+        extra_data=extra_data if extra_data else None
     ))
     history = await message_crud.get_conversation_history(db, session.session_id, limit=20)
     return session, user_message, history, is_new_session
@@ -91,7 +152,8 @@ async def chat(
                 db=db,
                 session_id=session.session_id,
                 user_message=request.message,
-                history=history
+                history=history,
+                attachments=request.attachments
             )
     except Exception as e:
         logger.error(f"❌ Agent 处理失败: {e}", exc_info=True)
@@ -140,7 +202,8 @@ async def chat_stream(
                 db=db,
                 session_id=session.session_id,
                 user_message=request.message,
-                history=history
+                history=history,
+                attachments=request.attachments
             ):
                 chunk_type = chunk.get("type")
                 if chunk_type == "token":
@@ -160,7 +223,7 @@ async def chat_stream(
                 elif chunk_type == "approval_rejected":
                     yield sse("approval_rejected", {"tool_name": chunk["tool_name"]})
                 elif chunk_type == "done":
-                    yield sse("done", {})
+                    yield sse("done", {"assistant_message_id": chunk.get("assistant_message_id")})
         except Exception as e:
             logger.error(f"SSE stream error: {e}", exc_info=True)
             yield sse("error", {"message": str(e)})

@@ -1,17 +1,8 @@
 ---
 name: md-pdf-convert
 label: Markdown 转 PDF
-description: Convert Markdown to PDF using ReportLab (handle CJK characters, tables, charts, images)
+description: Convert existing Markdown files (.md) to PDF format. ONLY for Markdown→PDF conversion. NOT for creating reports from data.
 ---
-
-## ⚠️ PREREQUISITE: Load pdf-enhance skill first
-
-**CRITICAL**: Before proceeding with this skill, you MUST first call:
-```
-Skill(command="pdf-enhance")
-```
-
-The `pdf-enhance` skill contains **mandatory font configuration and layout rules** that apply to ALL PDF generation tasks. You must read and apply those rules during this conversion.
 
 ## Markdown → PDF Conversion (ReportLab)
 
@@ -38,17 +29,29 @@ Use case: Convert local Markdown documents to PDF (**currently only supports md 
 
 ##### 2.1) Handling CJK Character Encoding (Required)
 
-⚠️ **USE THE FONT CONFIGURATION FROM `pdf-enhance` SKILL** ⚠️
+**Chinese Font Configuration (MANDATORY):**
 
-You have already loaded the `pdf-enhance` skill which provides the **complete font configuration code** for handling Chinese characters. 
+For all Chinese text, use this exact font configuration:
 
-**MANDATORY**: Copy the font configuration code block from `pdf-enhance` skill exactly as specified:
-- The code block starts with `# ========== 字体配置 - 必须放在最开头 ==========`
-- It registers `NotoSansSC.ttf` from `~/.ling-agent/fonts/`
-- It provides both matplotlib and reportlab font setup
-- **DO NOT modify or skip any part of that configuration**
+```python
+# ========== 字体配置 - 必须放在最开头 ==========
+from pathlib import Path
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-If you did not load `pdf-enhance` yet, stop and load it now before continuing.
+_font_path = Path.home() / ".ling-agent" / "fonts" / "NotoSansSC.ttf"
+pdfmetrics.registerFont(TTFont('ChineseFont', str(_font_path)))
+PDF_FONT = 'ChineseFont'
+
+STYLES = getSampleStyleSheet()
+STYLES.add(ParagraphStyle(name='Chinese', fontName=PDF_FONT, fontSize=12, leading=18))
+STYLES.add(ParagraphStyle(name='ChineseTitle', fontName=PDF_FONT, fontSize=24, leading=30))
+STYLES.add(ParagraphStyle(name='ChineseH1', fontName=PDF_FONT, fontSize=18, leading=24))
+# ========== 字体配置结束 ==========
+```
+
+**MUST use `STYLES['Chinese']` for all Paragraph elements.**
 
 ##### 2.2) Rendering Tables, Bar Charts, Pie Charts, and Images
 
@@ -217,16 +220,14 @@ Combine parsing and rendering into a single executable script (e.g., `convert_md
 #### 4) Run the Conversion Script
 
 - Execute the script to produce the PDF
-- **Apply `pdf-enhance` layout rules**: Before finalizing, verify the PDF meets the quality standards defined in `pdf-enhance` skill:
+- **Verify layout quality**: Before delivery, check:
   - All text is readable and not clipped
   - Proper spacing and semantic grouping
   - Container relationships preserved
   - No harmful content collisions
-- If layout overflow occurs (oversized tables, large images, long code blocks): adjust scaling, line-wrapping, or page-break strategies and retry following the fix priority order from `pdf-enhance`
+- If layout overflow occurs (oversized tables, large images, long code blocks): adjust scaling, line-wrapping, or page-break strategies
 
 ### Layout Requirements (Clean and Readable)
-
-⚠️ **These requirements align with the `pdf-enhance` skill standards** ⚠️
 
 - Paper size: A4; recommended margins: 24–36 pt
 - Body font size: 12–14 pt; line spacing: 1.2–1.5×

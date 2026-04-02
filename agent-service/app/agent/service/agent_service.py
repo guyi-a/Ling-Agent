@@ -134,7 +134,8 @@ Always be concise and direct in your responses."""
         db: AsyncSession,
         session_id: str,
         user_message: str,
-        history: List[Dict[str, str]] = None
+        history: List[Dict[str, str]] = None,
+        attachments: List[Dict[str, Any]] = None
     ) -> str:
         """
         处理用户消息，调用 Agent，返回回复
@@ -159,8 +160,12 @@ Always be concise and direct in your responses."""
             # 动态渲染系统提示词（含当前时间和 session_id）
             rendered_prompt = self._render_system_prompt(session_id)
 
-            # 构建消息上下文
-            messages = self._build_messages(user_message, history, rendered_prompt)
+            # 构建消息上下文（支持多模态）
+            messages = self._build_messages(
+                user_message, history, rendered_prompt,
+                session_id=session_id,
+                attachments=attachments
+            )
             
             logger.info(f"🤖 开始处理消息 (session: {session_id[:8]}...)")
             logger.debug(f"消息上下文: {len(messages)} 条消息")
@@ -204,42 +209,179 @@ Always be concise and direct in your responses."""
             return f"处理消息时发生错误: {str(e)}"
     
     def _build_messages(
-        self, 
-        user_message: str, 
+        self,
+        user_message: str,
         history: List[Dict[str, str]] = None,
-        system_prompt: str = None
-    ) -> List[Dict[str, str]]:
+        system_prompt: str = None,
+        session_id: str = None,
+        attachments: List[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """
-        构建消息列表
-        
+        构建消息列表（支持多模态）
+
         Args:
             user_message: 当前用户消息
             history: 历史消息
             system_prompt: 动态渲染的系统提示词（可选，覆盖 agent 内置提示词）
-        
+            session_id: 会话ID（用于构建图片路径）
+            attachments: 当前消息的附件列表
+
         Returns:
-            完整的消息列表
+            完整的消息列表（支持多模态格式）
         """
+        from pathlib import Path
+        from app.core.config import settings
+
         messages = []
-        
+
         # 在消息列表头部注入动态系统提示词
         if system_prompt:
             messages.append({
                 "role": "system",
                 "content": system_prompt
             })
-        
-        # 添加历史消息（如果有）
+
+        # 添加历史消息（如果有），转换为多模态格式
         if history:
-            messages.extend(history)
-        
-        # 添加当前用户消息
-        messages.append({
-            "role": "user",
-            "content": user_message
-        })
-        
+            for msg in history:
+                messages.append(self._convert_to_multimodal_message(msg, session_id))
+
+        # 添加当前用户消息（支持附件）
+        current_msg = {"role": "user", "content": user_message}
+        if attachments:
+            current_msg["extra_data"] = {"attachments": attachments}
+            logger.info(f"📎 当前消息包含 {len(attachments)} 个附件")
+            for att in attachments:
+                logger.debug(f"  - {att.get('type', 'file')}: {att.get('path', 'unknown')}")
+
+        messages.append(self._convert_to_multimodal_message(current_msg, session_id))
+
         return messages
+
+    def _convert_to_multimodal_message(
+        self,
+        msg: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """
+        将消息转换为多模态格式（如果包含附件）
+
+        支持两种附件：
+        - 图片（image）：直接加载到多模态消息，LLM 可以"看到"
+        - 文件（file）：在文本中添加引用提示，让 Agent 知道可以读取
+
+        Args:
+            msg: 原始消息 {"role": "user", "content": "...", "extra_data": {...}}
+            session_id: 会话ID
+
+        Returns:
+            多模态消息格式
+        """
+        from pathlib import Path
+        from app.core.config import settings
+
+        # 复制原始消息的所有字段（保留 tool_call_id, tool_calls, name 等）
+        result = {k: v for k, v in msg.items() if k not in ["extra_data"]}
+
+        # 提取附件信息
+        extra_data = msg.get("extra_data", {})
+        if isinstance(extra_data, str):
+            import json
+            try:
+                extra_data = json.loads(extra_data)
+            except:
+                extra_data = {}
+
+        attachments = extra_data.get("attachments", [])
+
+        # 如果没有附件，直接返回原始消息（保留所有字段）
+        if not attachments:
+            return result
+
+        # 构建基础文本内容
+        text_content = msg.get("content", "")
+
+        # 收集图片附件（用于多模态）
+        image_parts = []
+        file_references = []
+
+        workspace_root = Path(settings.WORKSPACE_ROOT).resolve()
+
+        for att in attachments:
+            att_type = att.get("type", "file")
+            att_path = att.get("path", "")
+            full_path = workspace_root / session_id / att_path
+
+            if att_type == "image":
+                # 图片：转换为 base64 并加载到多模态消息
+                if full_path.exists():
+                    try:
+                        import base64
+                        import mimetypes
+
+                        # 读取图片并转为 base64
+                        image_data = full_path.read_bytes()
+                        base64_image = base64.b64encode(image_data).decode('utf-8')
+
+                        # 获取 MIME 类型
+                        mime_type, _ = mimetypes.guess_type(str(full_path))
+                        if not mime_type or not mime_type.startswith('image/'):
+                            mime_type = 'image/png'  # 默认
+
+                        # 构建 data URL
+                        data_url = f"data:{mime_type};base64,{base64_image}"
+
+                        image_parts.append({
+                            "type": "image_url",
+                            "image_url": {"url": data_url}
+                        })
+                        logger.info(f"📸 加载图片到多模态消息 (base64): {att_path}")
+                    except Exception as e:
+                        logger.error(f"❌ 加载图片失败 {att_path}: {e}")
+                        text_content += f"\n\n[Error: Failed to load image: {att_path}]"
+                else:
+                    logger.warning(f"⚠️  图片不存在: {full_path}")
+                    text_content += f"\n\n[Warning: Referenced image not found: {att_path}]"
+
+            elif att_type == "file":
+                # 普通文件：添加引用提示
+                if full_path.exists():
+                    file_size = full_path.stat().st_size
+                    file_size_str = self._format_file_size(file_size)
+                    file_references.append(
+                        f"📎 {att_path} ({file_size_str})"
+                    )
+                    logger.info(f"📎 引用文件: {att_path}")
+                else:
+                    logger.warning(f"⚠️  文件不存在: {full_path}")
+                    file_references.append(f"⚠️  {att_path} (not found)")
+
+        # 如果有文件引用，添加到文本末尾
+        if file_references:
+            text_content += "\n\n**Referenced files in workspace:**\n"
+            text_content += "\n".join(file_references)
+            text_content += "\n\nYou can use `read_file` tool to read their contents if needed."
+
+        # 更新 content 字段
+        if image_parts:
+            # 有图片：使用多模态格式
+            content_parts = [{"type": "text", "text": text_content}]
+            content_parts.extend(image_parts)
+            result["content"] = content_parts
+        else:
+            # 仅文件引用：返回纯文本
+            result["content"] = text_content
+
+        return result
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """格式化文件大小"""
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        else:
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
     
     async def _invoke_agent(self, messages: List[Dict[str, str]]):
         """调用 Agent（异步生成器，update 模式）"""
@@ -277,7 +419,8 @@ Always be concise and direct in your responses."""
         db: AsyncSession,
         session_id: str,
         user_message: str,
-        history: List[Dict[str, str]] = None
+        history: List[Dict[str, str]] = None,
+        attachments: List[Dict[str, Any]] = None
     ):
         """
         真流式输出，支持 HumanInTheLoop interrupt/resume。
@@ -295,7 +438,11 @@ Always be concise and direct in your responses."""
 
         set_session_id(session_id)
         rendered_prompt = self._render_system_prompt(session_id)
-        messages = self._build_messages(user_message, history, rendered_prompt)
+        messages = self._build_messages(
+            user_message, history, rendered_prompt,
+            session_id=session_id,
+            attachments=attachments
+        )
 
         # thread_id 用于 checkpointer 识别会话，每轮对话用 session_id
         config = {"configurable": {"thread_id": session_id}}
@@ -436,23 +583,25 @@ Always be concise and direct in your responses."""
                     run_input = Command(resume={"decisions": [{"type": "approve"}]})
 
             # 保存最终 assistant 消息
+            assistant_message_id = None
             if full_response:
-                await self._save_assistant_message(db, session_id, full_response)
+                assistant_message_id = await self._save_assistant_message(db, session_id, full_response)
 
         except asyncio.CancelledError:
             logger.info(f"⛔ 会话 {session_id[:8]}... 被用户停止")
 
             # 保存中断消息到数据库（保持历史记录完整）
             interrupt_msg = "⚠️ 用户已停止生成"
+            assistant_message_id = None
             if full_response:
                 # 如果有已生成的内容，保存部分内容 + 中断标记
-                await self._save_assistant_message(
+                assistant_message_id = await self._save_assistant_message(
                     db, session_id,
                     f"{full_response}\n\n{interrupt_msg}"
                 )
             else:
                 # 没有内容，仅保存中断消息
-                await self._save_assistant_message(db, session_id, interrupt_msg)
+                assistant_message_id = await self._save_assistant_message(db, session_id, interrupt_msg)
 
             yield {"type": "cancelled", "text": "生成已被停止"}
 
@@ -466,13 +615,15 @@ Always be concise and direct in your responses."""
         except Exception as e:
             logger.error(f"stream_message error: {e}", exc_info=True)
             yield {"type": "token", "text": f"\n\n[错误: {e}]"}
+            assistant_message_id = None
 
         finally:
             # 清理活跃任务记录
             self._active_tasks.pop(session_id, None)
             logger.info(f"✅ 会话 {session_id[:8]}... 执行结束")
 
-        yield {"type": "done"}
+        # 在 done 事件中包含 assistant_message_id
+        yield {"type": "done", "assistant_message_id": assistant_message_id}
     
     async def _save_ai_tool_call_message(
         self,
@@ -521,14 +672,17 @@ Always be concise and direct in your responses."""
         db: AsyncSession,
         session_id: str,
         content: str
-    ):
+    ) -> Optional[str]:
         """
         保存 Assistant 消息到数据库
-        
+
         Args:
             db: 数据库会话
             session_id: 会话ID
             content: 消息内容
+
+        Returns:
+            保存的消息ID（message_id），失败时返回 None
         """
         try:
             assistant_message = MessageCreate(
@@ -537,12 +691,14 @@ Always be concise and direct in your responses."""
                 content=content,
                 extra_data={"timestamp": datetime.utcnow().isoformat()}
             )
-            
-            await message_crud.create(db, assistant_message)
+
+            saved_message = await message_crud.create(db, assistant_message)
             logger.debug(f"💾 Assistant message 已保存 ({len(content)} 字符)")
-            
+            return saved_message.message_id
+
         except Exception as e:
             logger.error(f"保存 assistant message 失败: {e}", exc_info=True)
+            return None
     
     def is_ready(self) -> bool:
         """

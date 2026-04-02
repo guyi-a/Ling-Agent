@@ -1,7 +1,7 @@
 ---
 name: report-generator
 label: 报告生成
-description: Generate reports (PDF or PPTX). All generated documents MUST follow report structure rules and pass corresponding validation.
+description: Generate data analysis reports with charts and insights (PDF/PPTX). Use when user needs a professional report from raw data. NOT for converting existing Markdown files.
 ---
 
 ## Language Settings
@@ -81,8 +81,6 @@ For each data point:
 
 After generating any report:
 
-1. **PDF output** → Run `pdf-enhance` validation and auto-fix
-2. **PPTX output** → Run `pptx-enhance` validation and auto-fix
-3. **All charts** → Follow `data-analysis` styling rules
-
-Auto-enhance all generated documents for professional quality.
+1. **Verify layout quality**: Ensure all text is readable, properly spaced, and not clipped
+2. **Check visualizations**: All charts must use Chinese fonts (from config above) and have clear labels
+3. **Professional formatting**: Use consistent colors, spacing, and typography throughout

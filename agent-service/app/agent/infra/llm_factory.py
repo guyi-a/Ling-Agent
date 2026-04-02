@@ -27,7 +27,7 @@ def get_llm() -> Optional[ChatOpenAI]:
     try:
         llm = ChatOpenAI(
             temperature=0.3,
-            max_tokens=50000,
+            max_tokens=8192,  # 通义千问最大支持32768，设置为8192性能更好
             timeout=None,
             max_retries=2,
             base_url=settings.LLM_BASE_URL,

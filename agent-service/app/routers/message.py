@@ -63,7 +63,7 @@ async def get_conversation_history(
     # 直接从 DB 取原始消息，过滤掉 tool 消息和无文字内容的 assistant 消息
     raw = await message_crud.get_by_session(db, session_id, skip=0, limit=limit)
     messages = [
-        {"role": m.role, "content": m.content}
+        {"role": m.role, "content": m.content, "message_id": m.message_id}
         for m in raw
         if m.role in ("user", "assistant") and (m.content or "").strip()
     ]
@@ -111,3 +111,51 @@ async def delete_message(
     await _check_session_owner(message.session_id, current_user, db)
     await message_crud.delete(db, message_id)
     return {"status": "success", "message": f"消息 {message_id} 已删除"}
+
+
+@router.delete("/session/{session_id}/after/{message_id}")
+async def delete_messages_after(
+    session_id: str,
+    message_id: str,
+    include_self: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    删除指定消息及之后的所有消息（用于编辑消息场景）
+
+    Args:
+        session_id: 会话ID
+        message_id: 起始消息ID
+        include_self: 是否包含 message_id 自身（默认 True）
+
+    Returns:
+        删除的消息数量
+    """
+    # 验证会话权限
+    await _check_session_owner(session_id, current_user, db)
+
+    # 获取目标消息
+    message = await message_crud.get_by_id(db, message_id)
+    if not message:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="消息不存在")
+
+    if message.session_id != session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="消息不属于指定会话"
+        )
+
+    # 删除该时间点之后的所有消息
+    deleted_count = await message_crud.delete_after_timestamp(
+        db,
+        session_id,
+        message.created_at,
+        include_equal=include_self
+    )
+
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+        "message": f"已删除 {deleted_count} 条消息"
+    }

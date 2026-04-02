@@ -186,3 +186,7 @@ agent-service/docs/
 
 # Agent workspace (user uploaded files and generated outputs)
 agent-service/workspace/
+
+# Local documentation (for Claude Code context, not for repo)
+CLAUDE.md
+FEATURE_ROADMAP.md

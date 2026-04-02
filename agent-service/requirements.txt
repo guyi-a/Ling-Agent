@@ -2,6 +2,7 @@
 
 # Web framework
 fastapi==0.110.0
+starlette<1.0.0,>=0.37.2  # 固定版本，避免 browser-use 升级导致不兼容
 uvicorn==0.29.0
 python-multipart==0.0.22
 

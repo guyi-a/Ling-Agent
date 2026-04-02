@@ -44,23 +44,8 @@ body {
     padding: 16px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
 }
-
-.window-controls {
-    display: flex;
-    gap: 8px;
-}
-
-.control {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-}
-
-.control.close { background-color: #ff5f56; }
-.control.minimize { background-color: #ffbd2e; }
-.control.maximize { background-color: #27c93f; }
 
 .sidebar-actions .icon-btn {
     background: none;
@@ -484,6 +469,7 @@ body {
     color: var(--text-primary);
 }
 
+.ws-file-row:hover .ws-file-ref-btn,
 .ws-file-row:hover .ws-file-dl-btn {
     opacity: 1;
 }
@@ -500,6 +486,7 @@ body {
 .ws-file-name-text.ws-previewable:hover { color: #7ab4f5; }
 .ws-file-size-text { flex-shrink: 0; font-size: 11px; }
 
+.ws-file-ref-btn,
 .ws-file-dl-btn {
     flex-shrink: 0;
     background: none;
@@ -512,6 +499,7 @@ body {
     font-size: 11px;
 }
 
+.ws-file-ref-btn:hover,
 .ws-file-dl-btn:hover { color: var(--text-primary); }
 
 .ws-footer {
@@ -685,6 +673,56 @@ body {
     max-width: 800px;
     margin: 0 auto;
     border: 1px solid var(--border-color);
+}
+
+/* 附件预览区域 */
+.attachments-preview {
+    display: flex;
+    gap: 8px;
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.attachment-item {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: var(--hover-bg);
+    flex-shrink: 0;
+}
+
+.attachment-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.attachment-item .remove-btn {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 60, 60, 0.9);
+    border: 1px solid var(--bg-color);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    transition: transform 0.15s;
+}
+
+.attachment-item .remove-btn:hover {
+    background: rgba(255, 0, 0, 1);
+    transform: scale(1.15);
 }
 
 .input-wrapper textarea {
