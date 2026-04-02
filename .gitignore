@@ -188,5 +188,4 @@ agent-service/docs/
 agent-service/workspace/
 
 # Local documentation (for Claude Code context, not for repo)
-CLAUDE.md
 FEATURE_ROADMAP.md
