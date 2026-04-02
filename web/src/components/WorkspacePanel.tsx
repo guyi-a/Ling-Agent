@@ -234,7 +234,7 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
                 )}
                 <button
                   onClick={() => handleDownload(file)}
-                  className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded"
+                  className="p-1 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded"
                   title="下载"
                 >
                   <Download className="w-3 h-3" />
@@ -286,7 +286,7 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 transition-colors"
                 >
                   <Upload className="w-3 h-3" />
                   {uploading ? '上传中...' : '上传'}
@@ -418,7 +418,7 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
               <button
                 onClick={() => handleDownload(previewFile)}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 transition-colors"
               >
                 下载
               </button>

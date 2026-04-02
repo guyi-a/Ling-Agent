@@ -106,7 +106,7 @@ export default function FileSelector({ sessionId, open, onClose, onSelect }: Fil
               key={file.path}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
                 isSelected
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700'
+                  ? 'bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-900/20 dark:to-accent-900/20 gradient-border'
                   : 'hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
@@ -166,7 +166,7 @@ export default function FileSelector({ sessionId, open, onClose, onSelect }: Fil
             onClick={() => setActiveTab('uploads')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'uploads'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
             }`}
           >
@@ -176,7 +176,7 @@ export default function FileSelector({ sessionId, open, onClose, onSelect }: Fil
             onClick={() => setActiveTab('outputs')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'outputs'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
             }`}
           >
@@ -204,7 +204,7 @@ export default function FileSelector({ sessionId, open, onClose, onSelect }: Fil
             <button
               onClick={handleConfirm}
               disabled={selectedFiles.size === 0}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               确定附加 ({selectedFiles.size})
             </button>

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageSquare, Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X } from 'lucide-react'
+import { MessageSquare, Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSSEChat } from '@/hooks/useSSEChat'
+import { useThemeStore } from '@/stores/themeStore'
 import SessionSidebar from '@/components/SessionSidebar'
 import WorkspacePanel from '@/components/WorkspacePanel'
 import ApprovalCard from '@/components/ApprovalCard'
@@ -22,6 +23,7 @@ export default function ChatPage() {
   const [editContent, setEditContent] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, isStreaming, currentSessionId, sendMessage, stopStreaming, setMessages } = useSSEChat()
+  const { isDark, toggleTheme } = useThemeStore()
 
   // 加载会话历史消息
   const loadSessionHistory = useCallback(async (sessionId: string) => {
@@ -196,27 +198,49 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
+        <header className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 gradient-bg-light">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-6 h-6 text-blue-500" />
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Ling-Agent</h1>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-accent-600 flex items-center justify-center shadow-lg">
+                <MessageSquare className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-xl font-semibold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
+                Ling-Agent
+              </h1>
             </div>
-            {isStreaming && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={stopStreaming}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/30 transition-colors"
+                onClick={toggleTheme}
+                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title={isDark ? '切换到浅色模式' : '切换到深色模式'}
               >
-                <StopCircle className="w-4 h-4" />
-                停止生成
+                {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
-            )}
+              {isStreaming && (
+                <button
+                  onClick={stopStreaming}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/30 transition-colors"
+                >
+                  <StopCircle className="w-4 h-4" />
+                  停止生成
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Messages */}
-        <main className="flex-1 overflow-y-auto p-4">
-          <div className="max-w-4xl mx-auto space-y-4">
+        <main className="flex-1 overflow-y-auto p-4 relative">
+          {/* 浮动气泡背景 */}
+          <div className="floating-bubbles">
+            <div className="bubble"></div>
+            <div className="bubble"></div>
+            <div className="bubble"></div>
+            <div className="bubble"></div>
+            <div className="bubble"></div>
+          </div>
+
+          <div className="max-w-4xl mx-auto space-y-4 relative z-10">
             {messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 py-20">
                 <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20" />
@@ -226,13 +250,13 @@ export default function ChatPage() {
               messages.map((msg, idx) => (
                 <div
                   key={msg.id}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} message-enter`}
                 >
                   <div
-                    className={`group relative max-w-[80%] px-4 py-3 rounded-lg ${
+                    className={`group relative max-w-[80%] px-4 py-3 rounded-xl ${
                       msg.role === 'user'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700'
+                        ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-xl transition-shadow'
+                        : 'bg-white dark:bg-gray-800 shadow-md hover:shadow-lg border border-gray-200 dark:border-gray-700 transition-all'
                     }`}
                   >
                     {msg.role === 'user' ? (
@@ -282,7 +306,7 @@ export default function ChatPage() {
                       <>
                         {/* AI 消息内容 */}
                         {msg.content && (
-                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                          <div className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-gray-100">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {msg.content}
                             </ReactMarkdown>
@@ -336,10 +360,13 @@ export default function ChatPage() {
                           />
                         )}
 
-                        {/* 流式加载指示器 */}
-                        {msg.isStreaming && (
+                        {/* 流式加载指示器（带打字机光标） */}
+                        {msg.isStreaming && msg.content && (
+                          <span className="typing-cursor inline-block"></span>
+                        )}
+                        {msg.isStreaming && !msg.content && (
                           <div className="flex items-center gap-2 mt-2 text-gray-500 dark:text-gray-400">
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
                             <span className="text-sm">AI 正在思考...</span>
                           </div>
                         )}
@@ -388,7 +415,7 @@ export default function ChatPage() {
               <button
                 onClick={() => setFileSelectorOpen(true)}
                 disabled={!selectedSessionId && !currentSessionId || isStreaming}
-                className="p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 title="附加文件"
               >
                 <Paperclip className="w-5 h-5" />
@@ -405,7 +432,7 @@ export default function ChatPage() {
               <button
                 onClick={handleSend}
                 disabled={!message.trim() || isStreaming}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
               >
                 <Send className="w-5 h-5" />
               </button>

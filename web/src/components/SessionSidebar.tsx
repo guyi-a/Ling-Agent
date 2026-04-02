@@ -103,7 +103,7 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={handleNewChat}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 transition-all shadow-lg hover:shadow-xl"
         >
           <Plus className="w-4 h-4" />
           新对话
@@ -122,9 +122,9 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
               <div
                 key={session.session_id}
                 onClick={() => onSelectSession(session.session_id)}
-                className={`group px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                className={`group px-3 py-2 rounded-lg cursor-pointer transition-all ${
                   currentSessionId === session.session_id
-                    ? 'bg-blue-100 dark:bg-blue-900/30'
+                    ? 'bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-900/30 dark:to-accent-900/30 gradient-border gradient-shadow-sm'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
