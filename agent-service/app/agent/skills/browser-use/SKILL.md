@@ -6,6 +6,28 @@ description: Use when the user wants a browser task completed directly in chat, 
 
 # Browser Automation with browser-use CLI
 
+**🚨 CRITICAL: This CLI does NOT support `fill`, `type <selector>`, or `keys` commands. ONLY use `input <index> "text"` for text input and `click <index>` for submission. See "Supported Commands" below.**
+
+## Command Restrictions (READ FIRST)
+
+**❌ FORBIDDEN - These commands DO NOT EXIST in this CLI version:**
+- `fill` → Use `input <index> "text"` instead
+- `type <selector> <text>` → Use `input <index> "text"` instead
+- `keys "Enter"` → Use `click <index>` on submit button instead
+- CSS selectors (`#id`, `.class`) → Use numeric `[index]` from `state` instead
+
+**✅ ONLY use these commands:**
+- `open <url>` - Open page
+- `state` - Get element indices
+- `input <index> "text"` - Type into input field
+- `click <index>` - Click element
+- `scroll` - Scroll page
+- `get text <index>` - Get text
+- `eval <js>` - Run JavaScript
+- `close` - Close browser
+
+**Always run `state` first to get element indices, then use `input`/`click` with those indices.**
+
 ## When To Use
 
 Use this skill when the user wants a browser task completed **now in chat**.
@@ -18,6 +40,56 @@ Examples:
 - extract information from a live page
 
 If the user wants reusable code, a standalone script, or long-cycle automation, suggest creating a Python script instead.
+
+## Output Rules (CRITICAL)
+
+**Keep all output minimal and focused:**
+
+1. **One action = One line of status**
+   - ✅ Good: "✅ 已打开百度首页"
+   - ❌ Bad: "现在我将打开百度首页。首先，我会执行 open 命令...【详细解释】"
+
+2. **No redundant explanations**
+   - Don't explain what you're about to do before doing it
+   - Don't list multiple approaches or alternatives
+   - Don't repeat the command syntax or examples
+
+3. **Direct execution**
+   - Call the tool immediately
+   - Report only the essential result
+   - Move to the next step
+
+4. **Status format:**
+   ```
+   ✅ Opened page
+   🔍 Located element [105]
+   ✅ Input completed
+   ✅ Search submitted
+   ```
+
+5. **Error handling:**
+   - If something fails, report the error in one line
+   - Adjust and retry immediately
+   - No lengthy debugging explanations
+
+**Example - Good:**
+```
+✅ 已打开百度
+🔍 搜索框 [105]
+✅ 已输入"杨洋"
+✅ 搜索完成
+```
+
+**Example - Bad:**
+```
+现在为您启动 Chromium 浏览器，并在首页搜索框中输入"杨洋"并执行搜索：
+【大段解释】
+接下来，我将：
+1. 定位搜索框
+2. 输入关键词
+3. 点击按钮
+【继续解释】
+```
 
 ## Available Tools
 
@@ -53,6 +125,32 @@ Command-shape rule:
 - ❌ Wrong: `open https://example.com --headed --profile <profile_name>`
 - ❌ Wrong: `open https://example.com --headed`
 
+## Supported Commands (CRITICAL - READ THIS FIRST)
+
+**This CLI version ONLY supports these commands:**
+
+1. `open <url>` - Open a page
+2. `state` - List all interactive elements with [index]
+3. `click <index>` - Click element by index number
+4. `input <index> "text"` - Type text into input field by index number
+5. `scroll` / `scroll up` - Scroll the page
+6. `get text <index>` - Get text from element by index number
+7. `eval <javascript>` - Execute JavaScript code
+8. `close` - Close browser
+
+**FORBIDDEN commands that will fail immediately:**
+- ❌ `fill` - DOES NOT EXIST, always use `input <index>` instead
+- ❌ `type <selector> <text>` - DOES NOT EXIST, always use `input <index>` instead  
+- ❌ `keys "Enter"` - DOES NOT EXIST, always use `click <index>` on submit button
+- ❌ CSS selectors (`#id`, `.class`) - DOES NOT WORK, must use numeric `[index]` from `state`
+
+**CRITICAL RULES:**
+1. **NEVER try commands not in the supported list above**
+2. **ALWAYS use `state` first to get element index numbers**
+3. **ALWAYS use numeric index, NEVER use CSS selectors**
+4. **For text input: ONLY use `input <index> "text"`, nothing else**
+5. **For submitting forms: ONLY use `click <index>` on button, NEVER use `keys`**
+
 ## Core Workflow
 
 1. **Open or navigate** to the target page
@@ -60,10 +158,9 @@ Command-shape rule:
    - Returns a tree of elements with `[index]` for interaction
    - Only elements with `[index]` are interactive
    - `*[index]` means new elements appeared since last step
-3. **Interact** with elements:
+3. **Interact** with elements by index:
    - `click <index>` - Click an element
-   - `input <index> "text"` - Type into an input field
-   - `keys "Enter"` - Press keyboard keys
+   - `input <index> "text"` - Type into an input field (use this for all text input)
    - `scroll` / `scroll up` - Scroll the page
 4. **Read data**:
    - `get text <index>` - Get exact text from one element
@@ -71,6 +168,8 @@ Command-shape rule:
 5. **Verify** the resulting page state before continuing
 
 Rules:
+- **Keep output minimal** - Follow the Output Rules above, one line per action
+- **Never try unsupported commands** - Check the Supported Commands list above
 - Use `state` to locate and verify, not as final quoted data
 - Use `eval` for extraction when it is the simplest reliable choice
 - Do **not** use `eval` to force business-state changes or bypass validation

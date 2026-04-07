@@ -28,7 +28,17 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
     setPreviewContent(null)
   }, [previewContent])
 
-  const loadFiles = useCallback(async () => {
+  // 比较文件列表是否相同（避免不必要的状态更新）
+  const filesEqual = (a: WorkspaceFile[], b: WorkspaceFile[]) => {
+    if (a.length !== b.length) return false
+    return a.every((file, idx) =>
+      file.name === b[idx]?.name &&
+      file.size === b[idx]?.size &&
+      file.folder === b[idx]?.folder
+    )
+  }
+
+  const loadFiles = useCallback(async (showLoading = false) => {
     if (!sessionId) {
       setUploadFiles([])
       setOutputFiles([])
@@ -36,20 +46,24 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
     }
 
     try {
-      setLoading(true)
+      if (showLoading) setLoading(true)
       const data = await workspaceApi.listFiles(sessionId)
-      setUploadFiles(data.filter((f) => f.folder === 'uploads'))
-      setOutputFiles(data.filter((f) => f.folder === 'outputs'))
+      const newUploads = data.filter((f) => f.folder === 'uploads')
+      const newOutputs = data.filter((f) => f.folder === 'outputs')
+
+      // 只有文件列表真的改变时才更新状态
+      setUploadFiles(prev => filesEqual(prev, newUploads) ? prev : newUploads)
+      setOutputFiles(prev => filesEqual(prev, newOutputs) ? prev : newOutputs)
     } catch (error) {
       console.error('加载文件列表失败:', error)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [sessionId])
 
   // 初始加载
   useEffect(() => {
-    loadFiles()
+    loadFiles(true)
   }, [loadFiles])
 
   // 自动刷新：AI 生成时每2秒刷新，平时每5秒刷新
@@ -263,7 +277,7 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
             <h3 className="font-semibold text-gray-900 dark:text-gray-100">工作区</h3>
             {sessionId && (
               <button
-                onClick={loadFiles}
+                onClick={() => loadFiles(true)}
                 disabled={loading}
                 className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="刷新"

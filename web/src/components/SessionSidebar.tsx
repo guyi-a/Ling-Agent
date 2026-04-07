@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Plus, MessageSquare, Trash2, Edit2, Check, X } from 'lucide-react'
 import { sessionsApi } from '@/api/sessions'
 import { useAuthStore } from '@/stores/authStore'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import type { Session } from '@/types'
 
 interface SessionSidebarProps {
@@ -15,6 +16,8 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   const loadSessions = useCallback(async () => {
@@ -59,20 +62,33 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
     onSelectSession(null)
   }
 
-  const handleDelete = async (sessionId: string, e: React.MouseEvent) => {
+  const handleDelete = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('确定删除此会话？')) return
+    setDeletingSessionId(sessionId)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deletingSessionId) return
 
     try {
-      await sessionsApi.delete(sessionId, true)
-      setSessions(sessions.filter((s) => s.session_id !== sessionId))
-      if (currentSessionId === sessionId) {
+      await sessionsApi.delete(deletingSessionId, true)
+      setSessions(sessions.filter((s) => s.session_id !== deletingSessionId))
+      if (currentSessionId === deletingSessionId) {
         onSelectSession(null)
       }
       onSessionsChange?.()
     } catch (error) {
       console.error('删除会话失败:', error)
+    } finally {
+      setDeleteDialogOpen(false)
+      setDeletingSessionId(null)
     }
+  }
+
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false)
+    setDeletingSessionId(null)
   }
 
   const startEdit = (session: Session, e: React.MouseEvent) => {
@@ -178,6 +194,18 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="删除会话"
+        message="此操作无法撤销，会话中的所有消息都将被永久删除。"
+        confirmText="删除"
+        cancelText="取消"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageSquare, Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useSSEChat } from '@/hooks/useSSEChat'
+import { useSSEChat, getMessageContent, type MessagePart } from '@/hooks/useSSEChat'
 import { useThemeStore } from '@/stores/themeStore'
 import SessionSidebar from '@/components/SessionSidebar'
 import WorkspacePanel from '@/components/WorkspacePanel'
@@ -29,15 +29,71 @@ export default function ChatPage() {
   const loadSessionHistory = useCallback(async (sessionId: string) => {
     try {
       const response = await chatApi.getHistory(sessionId)
-      // API返回的格式: {session_id, messages: [{role, content, message_id?}]}
-      const historyMessages = (response.messages || []).map((msg: any, idx: number) => ({
-        id: `history-${sessionId}-${idx}`,
-        messageId: msg.message_id,  // 保存后端的 message_id
-        role: msg.role,
-        content: msg.content,
-        isStreaming: false,
-      }))
-      setMessages(historyMessages)
+      // API返回的格式: {session_id, messages: [{role, content, message_id?, extra_data?}]}
+      // 转换为新的 parts 格式
+      const rawMessages = (response.messages || []).map((msg: any, idx: number) => {
+        const parts: MessagePart[] = []
+
+        // 解析 extra_data 中的 tool_calls
+        let extraData: any = {}
+        if (msg.extra_data) {
+          try {
+            extraData = typeof msg.extra_data === 'string' ? JSON.parse(msg.extra_data) : msg.extra_data
+          } catch (e) {
+            console.warn('解析 extra_data 失败:', e)
+          }
+        }
+
+        // 如果有 tool_calls，重建交错的 parts
+        if (msg.role === 'assistant' && extraData.tool_calls && Array.isArray(extraData.tool_calls)) {
+          // assistant 消息带 tool_calls：先添加文本（如果有），然后添加工具
+          if (msg.content) {
+            parts.push({ type: 'text' as const, content: msg.content })
+          }
+          extraData.tool_calls.forEach((tc: any) => {
+            // 如果是 Skill 工具，从 args 中提取实际技能名
+            let displayName = tc.name
+            if (tc.name === 'Skill' && tc.args?.skill) {
+              displayName = tc.args.skill
+            }
+
+            parts.push({
+              type: 'tool' as const,
+              toolName: displayName,
+              toolStatus: 'done' as const  // 历史消息中的工具都是已完成的
+            })
+          })
+        } else {
+          // 普通消息：只有文本
+          if (msg.content) {
+            parts.push({ type: 'text' as const, content: msg.content })
+          }
+        }
+
+        return {
+          id: `history-${sessionId}-${idx}`,
+          messageId: msg.message_id,
+          role: msg.role,
+          parts,
+          isStreaming: false,
+        }
+      })
+
+      // 合并连续的同角色消息（特别是 assistant 的多段回复）
+      const mergedMessages: typeof rawMessages = []
+      for (const msg of rawMessages) {
+        const lastMsg = mergedMessages[mergedMessages.length - 1]
+
+        // 如果当前消息和上一条消息角色相同，合并 parts
+        if (lastMsg && lastMsg.role === msg.role) {
+          lastMsg.parts = [...lastMsg.parts, ...msg.parts]
+          // 保留第一条消息的 messageId
+        } else {
+          mergedMessages.push(msg)
+        }
+      }
+
+      setMessages(mergedMessages)
     } catch (error) {
       console.error('加载历史消息失败:', error)
       setMessages([])
@@ -168,7 +224,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (selectedSessionId && selectedSessionId !== currentSessionId) {
       loadSessionHistory(selectedSessionId)
-    } else if (!selectedSessionId) {
+    } else if (!selectedSessionId && !currentSessionId) {
+      // 只有在没有任何会话时才清空消息
       setMessages([])
     }
   }, [selectedSessionId, currentSessionId, loadSessionHistory, setMessages])
@@ -289,13 +346,13 @@ export default function ChatPage() {
                           </div>
                         ) : (
                           <>
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            <p className="whitespace-pre-wrap">{getMessageContent(msg)}</p>
                             {/* 用户消息操作菜单 */}
                             {!msg.isStreaming && msg.messageId && (
                               <MessageActions
                                 role="user"
-                                onCopy={() => handleCopyMessage(msg.content)}
-                                onEdit={() => handleStartEdit(msg.messageId!, msg.content)}
+                                onCopy={() => handleCopyMessage(getMessageContent(msg))}
+                                onEdit={() => handleStartEdit(msg.messageId!, getMessageContent(msg))}
                                 onDelete={() => handleDeleteMessage(msg.messageId)}
                               />
                             )}
@@ -304,44 +361,44 @@ export default function ChatPage() {
                       </>
                     ) : (
                       <>
-                        {/* AI 消息内容 */}
-                        {msg.content && (
-                          <div className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-gray-100">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {msg.content}
-                            </ReactMarkdown>
-                          </div>
-                        )}
+                        {/* AI 消息 - 按 parts 顺序渲染 */}
+                        <div className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-gray-100 leading-loose [&>*]:mb-4">
+                          {msg.parts.map((part, partIdx) => {
+                            if (part.type === 'text' && part.content) {
+                              return (
+                                <ReactMarkdown key={partIdx} remarkPlugins={[remarkGfm]}>
+                                  {part.content}
+                                </ReactMarkdown>
+                              )
+                            }
 
-                        {/* 工具调用卡片 */}
-                        {msg.toolCalls && msg.toolCalls.length > 0 && (
-                          <div className="mt-3 space-y-2">
-                            {msg.toolCalls.map((tool, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-md text-sm"
-                              >
-                                {tool.status === 'pending' && (
-                                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                                )}
-                                {tool.status === 'done' && (
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                )}
-                                {tool.status === 'rejected' && (
-                                  <Clock className="w-4 h-4 text-orange-500" />
-                                )}
-                                <span className="font-mono text-gray-700 dark:text-gray-300">
-                                  {tool.name}
-                                </span>
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {tool.status === 'pending' && '执行中...'}
-                                  {tool.status === 'done' && '完成'}
-                                  {tool.status === 'rejected' && '等待审批'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                            if (part.type === 'tool') {
+                              return (
+                                <div key={partIdx} className="flex items-center gap-2 px-3 py-2 my-2 bg-gray-100 dark:bg-gray-700 rounded-md text-sm not-prose">
+                                  {part.toolStatus === 'pending' && (
+                                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                  )}
+                                  {part.toolStatus === 'done' && (
+                                    <CheckCircle className="w-4 h-4 text-green-500" />
+                                  )}
+                                  {part.toolStatus === 'rejected' && (
+                                    <Clock className="w-4 h-4 text-orange-500" />
+                                  )}
+                                  <span className="font-mono text-gray-700 dark:text-gray-300">
+                                    {part.toolName}
+                                  </span>
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    {part.toolStatus === 'pending' && '执行中...'}
+                                    {part.toolStatus === 'done' && '完成'}
+                                    {part.toolStatus === 'rejected' && '等待审批'}
+                                  </span>
+                                </div>
+                              )
+                            }
+
+                            return null
+                          })}
+                        </div>
 
                         {/* 审批卡片 */}
                         {msg.approvalRequest && (
@@ -361,10 +418,10 @@ export default function ChatPage() {
                         )}
 
                         {/* 流式加载指示器（带打字机光标） */}
-                        {msg.isStreaming && msg.content && (
+                        {msg.isStreaming && msg.parts.length > 0 && (
                           <span className="typing-cursor inline-block"></span>
                         )}
-                        {msg.isStreaming && !msg.content && (
+                        {msg.isStreaming && msg.parts.length === 0 && (
                           <div className="flex items-center gap-2 mt-2 text-gray-500 dark:text-gray-400">
                             <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
                             <span className="text-sm">AI 正在思考...</span>
@@ -379,7 +436,7 @@ export default function ChatPage() {
                               idx === messages.length - 1 ||
                               (idx === messages.length - 2 && messages[messages.length - 1].isStreaming)
                             }
-                            onCopy={() => handleCopyMessage(msg.content)}
+                            onCopy={() => handleCopyMessage(getMessageContent(msg))}
                             onRegenerate={() => handleRegenerate(msg.messageId)}
                             onDelete={() => handleDeleteMessage(msg.messageId)}
                           />

@@ -63,7 +63,7 @@ async def get_conversation_history(
     # 直接从 DB 取原始消息，过滤掉 tool 消息和无文字内容的 assistant 消息
     raw = await message_crud.get_by_session(db, session_id, skip=0, limit=limit)
     messages = [
-        {"role": m.role, "content": m.content, "message_id": m.message_id}
+        {"role": m.role, "content": m.content, "message_id": m.message_id, "extra_data": m.extra_data}
         for m in raw
         if m.role in ("user", "assistant") and (m.content or "").strip()
     ]

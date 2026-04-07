@@ -104,10 +104,11 @@ async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSe
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
     else:
         from app.schemas.session import SessionCreate
-        from zoneinfo import ZoneInfo
+        # 使用用户消息的前30个字符作为会话标题
+        title = request.message[:30] + "..." if len(request.message) > 30 else request.message
         session = await session_crud.create(
             db,
-            SessionCreate(title=f"Chat at {datetime.now(ZoneInfo('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M')}"),
+            SessionCreate(title=title),
             current_user.user_id
         )
         is_new_session = True

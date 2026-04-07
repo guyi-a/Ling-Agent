@@ -40,16 +40,18 @@ Ling-Agent/
 │   │   ├── agent/          # Agent 核心
 │   │   │   ├── infra/      # LLM 工厂、Agent 工厂
 │   │   │   ├── prompts/    # core_prompt.md 系统提示词
-│   │   │   ├── skills/     # 7个专业技能（每个技能有 SKILL.md）
+│   │   │   ├── skills/     # 9个专业技能（每个技能有 SKILL.md）
 │   │   │   │   ├── data-analysis/
 │   │   │   │   ├── data-cleaning/
 │   │   │   │   ├── news-enhance/
 │   │   │   │   ├── report-generator/
 │   │   │   │   ├── md-pdf-convert/
 │   │   │   │   ├── doc-to-pptx/
-│   │   │   │   └── browser-use/    # 浏览器自动化（最新）
+│   │   │   │   ├── browser-use/
+│   │   │   │   ├── file-organizer/   # 文件整理（最新）
+│   │   │   │   └── pdf-enhance/      # PDF 质量标准（最新）
 │   │   │   ├── service/    # agent_service.py 核心服务
-│   │   │   └── tools/      # 11个工具（文件、Python、Shell、网络、浏览器等）
+│   │   │   └── tools/      # 10个工具（文件、Python、Shell、网络、浏览器等）
 │   │   ├── core/           # 配置、依赖注入、审批逻辑
 │   │   ├── crud/           # 数据库 CRUD 操作
 │   │   ├── models/         # SQLAlchemy 模型
@@ -79,7 +81,6 @@ Ling-Agent/
 │   └── package.json
 ├── frontend/               # 原生前端（已不维护）
 ├── start-dev.sh           # 一键启动脚本
-├── FEATURE_ROADMAP.md     # 功能规划文档
 └── README.md
 
 工作区目录结构（运行时）:
@@ -112,7 +113,7 @@ workspace/{session_id}/
 - ✅ **重新生成 AI 回复**（仅最后一条 AI 消息）
 - ✅ **编辑用户消息**（内联编辑，删除后续对话）
 
-### Skills 系统（7个专业技能）
+### Skills 系统（9个专业技能）
 1. `data-analysis` - 数据分析、可视化图表（matplotlib）
 2. `data-cleaning` - 数据清洗与预处理
 3. `news-enhance` - 实时新闻搜索增强
@@ -120,9 +121,12 @@ workspace/{session_id}/
 5. `md-pdf-convert` - Markdown 转 PDF
 6. `doc-to-pptx` - Word/PDF 转 PPTX
 7. `browser-use` - 浏览器自动化（Chrome 控制）
+8. `file-organizer` - 智能文件整理（按类型/日期/项目分类）✨ 最新
+9. `pdf-enhance` - PDF 生成质量标准（布局规范、中文字体）✨ 最新
 
-### 工具集成（11个工具）
+### 工具集成（10个工具）
 - `read_file` / `write_file` / `list_dir` - 文件操作（工作区隔离）
+  - read_file 支持纯文本和文档格式（.docx, .pdf, .pptx），自动提取文本、表格和图片
 - `python_repl` - Python 代码执行（脚本持久化到 outputs/scripts/）
 - `run_command` - Shell 命令执行
 - `web_search` / `web_fetch` - 网络搜索与抓取
@@ -231,42 +235,40 @@ LOG_LEVEL=INFO
 
 ---
 
-## 🎯 最近开发进展（2026-04-02）
+## 🎯 最近开发进展（2026-04-07）
 
-### ✅ 已完成功能
+### ✅ 已完成功能（从 krow-agent 借鉴）
 
-#### 1. 文件附加到消息（2-3小时）
-- 创建 `FileSelector.tsx` - 文件选择器模态框
-- 创建 `AttachmentChip.tsx` - 附件卡片组件
-- 修改 `ChatPage.tsx` - 添加 📎 按钮和附件展示
-- **效果**: 用户可以从工作区选择文件附加到消息，Agent 自动读取
+#### 1. Web 工具升级（2-3小时）
+- **web_fetch 工具**：升级到 httpx 异步库，添加 SSRF 防护、大小限制、精细错误处理
+- **web_search 工具**：使用 DuckDuckGo API（ddgs 库），支持常规搜索和新闻搜索，添加时间过滤
+- **效果**：更安全、更稳定的网络抓取和搜索能力
 
-#### 2. 消息操作菜单（2-3小时）
-- 后端添加批量删除 API：`DELETE /api/messages/session/{session_id}/after/{message_id}`
-- 后端 SSE 流返回 `assistant_message_id`（用于前端操作）
-- 创建 `messages.ts` API 客户端
-- 创建 `MessageActions.tsx` - 悬停显示操作按钮
-- 修改 `ChatPage.tsx` - 实现复制、删除、编辑、重新生成功能
-- **效果**: 悬停消息显示操作菜单，支持复制/编辑/删除/重新生成
+#### 2. 文档处理增强（2-3小时）
+- **read_file 工具**：合并原 read_document 功能，统一支持纯文本和文档格式
+- 支持格式：Word (.docx)、PDF (.pdf)、PowerPoint (.pptx)
+- 自动提取：文本内容、表格数据、图片资源
+- **效果**：工具数量减少（11→10），用户体验更简洁
+
+#### 3. 新增技能（2-3小时）
+- **file-organizer 技能**：智能文件整理，支持按类型/日期/项目分类，安全确认机制
+- **pdf-enhance 技能**：PDF 生成质量标准，包含中文字体配置、布局规范、防止文本截断
+- **效果**：7个技能 → 9个技能，增强工作区管理和文档生成能力
 
 ### 技术细节
 
-#### 文件附加实现原理
-1. 用户点击 📎 按钮打开 FileSelector
-2. 从工作区选择文件（uploads/ 或 outputs/）
-3. 文件显示为 AttachmentChip 卡片
-4. 发送消息时，attachments 数组传给后端
-5. 后端 `agent_service.py` 的 `_convert_to_multimodal_message()` 处理附件：
-   - 图片：转 base64 加载到多模态消息
-   - 文件：添加引用提示，Agent 可用 read_file 工具读取
+#### SSRF 防护实现
+```python
+def _hostname_is_private(hostname: str) -> bool:
+    # 检测私有 IP、localhost、.local/.internal 域名
+    # 阻止访问内网地址，防止 SSRF 攻击
+```
 
-#### 消息操作实现原理
-1. **消息 ID 映射**：前端保存后端的 `message_id` (UUID)
-   - 加载历史时从 API 获取
-   - 流式响应的 session 事件获取 user_message_id
-   - done 事件获取 assistant_message_id
-2. **编辑消息**：删除该消息及之后所有消息，重发新消息（避免分叉对话）
-3. **重新生成**：删除最后一条 AI 消息，重发上一条用户消息
+#### read_file 工具合并
+- 自动根据扩展名选择处理方式
+- .docx/.pdf/.pptx → 调用文档处理方法
+- 其他 → 纯文本读取
+- 统一返回格式，提取元数据（页数、表格数、图片数）
 
 ---
 
@@ -351,27 +353,6 @@ test: 测试相关
 4. **工具审批**：高危操作（shell、python、写文件）需用户批准
 5. **超时控制**：Python 执行 60 秒超时，审批 60 秒超时
 6. **文件大小限制**：上传文件最大 50MB
-
----
-
-## 🎯 下一步开发计划
-
-参考 `FEATURE_ROADMAP.md` 获取完整规划。
-
-### 立即实现（高优先级 ⭐⭐⭐⭐⭐）
-1. **代码块语法高亮 + 复制按钮**（1-1.5小时）
-   - 使用 `react-syntax-highlighter`
-   - 自动识别语言
-   - 一键复制代码
-
-2. **拖拽上传文件**（1小时）
-   - 拖拽到聊天区域上传
-   - 拖拽高亮提示
-
-### 近期计划（⭐⭐⭐⭐）
-3. **会话搜索/过滤**（1小时）
-4. **Agent 执行可视化**（3-4小时）- 显示工具调用树
-5. **响应式布局**（3-4小时）- 移动端适配
 
 ---
 
@@ -497,13 +478,11 @@ tail -f agent-service/logs/*.log  # 如果配置了日志文件
 4. **及时提交**：功能完成后提交 git commit
 
 ### 当前状态
-- ✅ 文件附加功能完整实现
-- ✅ 消息操作菜单完整实现
-- ✅ 所有代码已编译通过
-- ⚠️ 需要前端刷新浏览器生效
-
-### 待办事项
-参考 `FEATURE_ROADMAP.md` 中的优先级列表。
+- ✅ Web 工具升级完成（httpx + DuckDuckGo + SSRF 防护）
+- ✅ 文档处理增强完成（read_file 支持 Word/PDF/PPTX）
+- ✅ 新增 2 个技能（file-organizer、pdf-enhance）
+- ✅ 工具优化完成（read_file 和 read_document 合并）
+- 📋 技能总数：9 个 | 工具总数：10 个
 
 ---
 
@@ -560,10 +539,9 @@ git commit -m "feat: 添加消息操作菜单"
 如果你是新加入的开发者或 Claude Code，建议按以下顺序阅读：
 
 1. **README.md** - 项目概述和快速开始
-2. **FEATURE_ROADMAP.md** - 功能规划和优先级
-3. **本文档 (CLAUDE.md)** - 技术细节和开发指南
-4. **agent-service/app/agent/prompts/core_prompt.md** - Agent 系统提示词
-5. **agent-service/app/agent/skills/*/SKILL.md** - 各技能的使用说明
+2. **本文档 (CLAUDE.md)** - 技术细节和开发指南
+3. **agent-service/app/agent/prompts/core_prompt.md** - Agent 系统提示词
+4. **agent-service/app/agent/skills/*/SKILL.md** - 各技能的使用说明
 
 ---
 

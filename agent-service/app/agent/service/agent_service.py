@@ -445,7 +445,11 @@ Always be concise and direct in your responses."""
         )
 
         # thread_id 用于 checkpointer 识别会话，每轮对话用 session_id
-        config = {"configurable": {"thread_id": session_id}}
+        # recursion_limit: 提高递归限制，支持复杂多步骤操作（如 browser-use）
+        config = {
+            "configurable": {"thread_id": session_id},
+            "recursion_limit": 50
+        }
 
         full_response = ""
         current_round_text = ""
@@ -526,10 +530,11 @@ Always be concise and direct in your responses."""
 
                     elif kind == "on_tool_start":
                         tool_name = event.get("name", "tool")
+                        tool_input = event.get("data", {}).get("input", {})
                         # 把 pending 里的第一个 id 移到 executed（该工具已开始执行）
                         if pending_tool_call_ids:
                             executed_ids.append(pending_tool_call_ids.pop(0))
-                        yield {"type": "tool_start", "tool_name": tool_name}
+                        yield {"type": "tool_start", "tool_name": tool_name, "tool_input": tool_input}
 
                     elif kind == "on_tool_end":
                         tool_name = event.get("name", "tool")
@@ -591,17 +596,22 @@ Always be concise and direct in your responses."""
             logger.info(f"⛔ 会话 {session_id[:8]}... 被用户停止")
 
             # 保存中断消息到数据库（保持历史记录完整）
+            # 注意：db session 可能因取消操作而失效，需要捕获异常
             interrupt_msg = "⚠️ 用户已停止生成"
             assistant_message_id = None
-            if full_response:
-                # 如果有已生成的内容，保存部分内容 + 中断标记
-                assistant_message_id = await self._save_assistant_message(
-                    db, session_id,
-                    f"{full_response}\n\n{interrupt_msg}"
-                )
-            else:
-                # 没有内容，仅保存中断消息
-                assistant_message_id = await self._save_assistant_message(db, session_id, interrupt_msg)
+            try:
+                if full_response:
+                    # 如果有已生成的内容，保存部分内容 + 中断标记
+                    assistant_message_id = await self._save_assistant_message(
+                        db, session_id,
+                        f"{full_response}\n\n{interrupt_msg}"
+                    )
+                else:
+                    # 没有内容，仅保存中断消息
+                    assistant_message_id = await self._save_assistant_message(db, session_id, interrupt_msg)
+            except Exception as e:
+                logger.warning(f"保存中断消息失败（数据库连接已关闭）: {e}")
+                # 忽略保存失败，继续清理流程
 
             yield {"type": "cancelled", "text": "生成已被停止"}
 

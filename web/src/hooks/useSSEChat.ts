@@ -1,22 +1,33 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 
+export interface MessagePart {
+  type: 'text' | 'tool'
+  content?: string  // for text
+  toolName?: string  // for tool
+  toolStatus?: 'pending' | 'done' | 'rejected'  // for tool
+}
+
 export interface Message {
   id: string
   messageId?: string  // 后端的 message_id (UUID)
   role: 'user' | 'assistant'
-  content: string
+  parts: MessagePart[]  // 按时间顺序的内容片段
   isStreaming?: boolean
-  toolCalls?: Array<{
-    name: string
-    status: 'pending' | 'done' | 'rejected'
-  }>
   approvalRequest?: {
     requestId: string
     toolName: string
     toolInput: any
     remaining: number
   }
+}
+
+// 辅助函数：获取消息的纯文本内容
+export function getMessageContent(message: Message): string {
+  return message.parts
+    .filter(p => p.type === 'text')
+    .map(p => p.content || '')
+    .join('')
 }
 
 export function useSSEChat() {
@@ -84,7 +95,7 @@ export function useSSEChat() {
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
-        content: message,
+        parts: [{ type: 'text', content: message }],
       }
       setMessages((prev) => [...prev, userMessage])
       setIsStreaming(true)
@@ -94,7 +105,7 @@ export function useSSEChat() {
       const aiMessage: Message = {
         id: aiMessageId,
         role: 'assistant',
-        content: '',
+        parts: [],
         isStreaming: true,
       }
       setMessages((prev) => [...prev, aiMessage])
@@ -127,6 +138,7 @@ export function useSSEChat() {
         const decoder = new TextDecoder()
         let buffer = ''
         let accumulated = ''
+        let lastPartWasTool = false  // 跟踪最后一个 part 是否为 tool
 
         while (reader) {
           const { done, value } = await reader.read()
@@ -171,45 +183,79 @@ export function useSSEChat() {
                   )
                 }
               } else if (event === 'token') {
+                // 如果上一个 part 是 tool，重置 accumulated
+                if (lastPartWasTool) {
+                  accumulated = ''
+                  lastPartWasTool = false
+                }
+
                 // 累积 token
                 accumulated += parsed.text
                 setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessageId
-                      ? { ...msg, content: accumulated }
-                      : msg
-                  )
+                  prev.map((msg) => {
+                    if (msg.id !== aiMessageId) return msg
+
+                    const parts = [...msg.parts]
+                    // 如果最后一个 part 是 text，更新内容；否则创建新 text part
+                    if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
+                      parts[parts.length - 1] = {
+                        type: 'text',
+                        content: accumulated
+                      }
+                    } else {
+                      parts.push({ type: 'text', content: accumulated })
+                    }
+
+                    return { ...msg, parts }
+                  })
                 )
               } else if (event === 'tool_start') {
                 // 工具开始
+                lastPartWasTool = true  // 标记最后一个 part 是 tool
+
+                // 如果是 Skill 工具，从 tool_input 中提取实际技能名
+                let displayName = parsed.tool_name
+                if (parsed.tool_name === 'Skill' && parsed.tool_input?.skill) {
+                  displayName = parsed.tool_input.skill
+                }
+
                 setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessageId
-                      ? {
-                          ...msg,
-                          toolCalls: [
-                            ...(msg.toolCalls || []),
-                            { name: parsed.tool_name, status: 'pending' as const },
-                          ],
+                  prev.map((msg) => {
+                    if (msg.id !== aiMessageId) return msg
+
+                    return {
+                      ...msg,
+                      parts: [
+                        ...msg.parts,
+                        {
+                          type: 'tool',
+                          toolName: displayName,
+                          toolStatus: 'pending' as const
                         }
-                      : msg
-                  )
+                      ]
+                    }
+                  })
                 )
               } else if (event === 'tool_end') {
                 // 工具完成
                 setMessages((prev) =>
                   prev.map((msg) => {
-                    if (msg.id === aiMessageId && msg.toolCalls) {
-                      const updatedTools = [...msg.toolCalls]
-                      const idx = updatedTools.findIndex(
-                        (t) => t.name === parsed.tool_name && t.status === 'pending'
-                      )
-                      if (idx !== -1) {
-                        updatedTools[idx].status = 'done'
+                    if (msg.id !== aiMessageId) return msg
+
+                    const parts = [...msg.parts]
+                    // 找到最后一个状态为 pending 的同名工具
+                    for (let i = parts.length - 1; i >= 0; i--) {
+                      if (
+                        parts[i].type === 'tool' &&
+                        parts[i].toolName === parsed.tool_name &&
+                        parts[i].toolStatus === 'pending'
+                      ) {
+                        parts[i] = { ...parts[i], toolStatus: 'done' as const }
+                        break
                       }
-                      return { ...msg, toolCalls: updatedTools }
                     }
-                    return msg
+
+                    return { ...msg, parts }
                   })
                 )
               } else if (event === 'approval_required') {
@@ -233,28 +279,40 @@ export function useSSEChat() {
               } else if (event === 'approval_rejected') {
                 // 审批被拒绝
                 setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessageId
-                      ? {
-                          ...msg,
-                          approvalRequest: undefined,
-                          content: msg.content + `\n\n_已拒绝执行：${parsed.tool_name}_`,
-                        }
-                      : msg
-                  )
+                  prev.map((msg) => {
+                    if (msg.id !== aiMessageId) return msg
+
+                    const parts = [...msg.parts]
+                    parts.push({
+                      type: 'text',
+                      content: `\n\n_已拒绝执行：${parsed.tool_name}_`
+                    })
+
+                    return {
+                      ...msg,
+                      approvalRequest: undefined,
+                      parts
+                    }
+                  })
                 )
               } else if (event === 'cancelled') {
                 // 被取消
                 setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessageId
-                      ? {
-                          ...msg,
-                          isStreaming: false,
-                          content: msg.content + '\n\n_已停止生成_',
-                        }
-                      : msg
-                  )
+                  prev.map((msg) => {
+                    if (msg.id !== aiMessageId) return msg
+
+                    const parts = [...msg.parts]
+                    parts.push({
+                      type: 'text',
+                      content: '\n\n_已停止生成_'
+                    })
+
+                    return {
+                      ...msg,
+                      isStreaming: false,
+                      parts
+                    }
+                  })
                 )
               } else if (event === 'done') {
                 // 流式结束，保存 assistant 的 message_id
@@ -273,15 +331,21 @@ export function useSSEChat() {
               } else if (event === 'error') {
                 console.error('SSE error:', parsed)
                 setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessageId
-                      ? {
-                          ...msg,
-                          isStreaming: false,
-                          content: msg.content + `\n\n_错误：${parsed.message || '未知错误'}_`,
-                        }
-                      : msg
-                  )
+                  prev.map((msg) => {
+                    if (msg.id !== aiMessageId) return msg
+
+                    const parts = [...msg.parts]
+                    parts.push({
+                      type: 'text',
+                      content: `\n\n_错误：${parsed.message || '未知错误'}_`
+                    })
+
+                    return {
+                      ...msg,
+                      isStreaming: false,
+                      parts
+                    }
+                  })
                 )
               }
             } catch (err) {

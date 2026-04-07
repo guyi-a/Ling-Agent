@@ -28,3 +28,15 @@ loguru==0.7.2
 
 # Utilities
 pydantic==2.7.4
+
+# Web scraping (for web_fetch and web_search tools)
+httpx==0.28.1              # Async HTTP client (for web_fetch)
+ddgs==9.13.0               # DuckDuckGo search (for web_search)
+requests==2.31.0           # HTTP library (still needed by some dependencies)
+beautifulsoup4==4.12.3     # HTML parsing (not used by web tools after upgrade)
+lxml==5.3.0                # XML/HTML parser
+
+# Document processing (for read_document tool)
+PyMuPDF==1.24.0            # PDF reading
+python-docx==1.1.0         # Word reading
+python-pptx==0.6.23        # PowerPoint reading
