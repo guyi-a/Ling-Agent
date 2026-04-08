@@ -4,8 +4,9 @@ import { persist } from 'zustand/middleware'
 interface AuthState {
   token: string | null
   username: string | null
+  userId: string | null
   isAuthenticated: boolean
-  setAuth: (token: string, username: string) => void
+  setAuth: (token: string, username: string, userId: string) => void
   clearAuth: () => void
 }
 
@@ -14,16 +15,15 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       username: null,
+      userId: null,
       isAuthenticated: false,
-      setAuth: (token, username) => {
+      setAuth: (token, username, userId) => {
         localStorage.setItem('access_token', token)
-        localStorage.setItem('username', username)
-        set({ token, username, isAuthenticated: true })
+        set({ token, username, userId, isAuthenticated: true })
       },
       clearAuth: () => {
         localStorage.removeItem('access_token')
-        localStorage.removeItem('username')
-        set({ token: null, username: null, isAuthenticated: false })
+        set({ token: null, username: null, userId: null, isAuthenticated: false })
       },
     }),
     {

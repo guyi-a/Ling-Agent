@@ -1,11 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
+import apiClient from '@/api/client'
 import LoginPage from '@/pages/home/LoginPage'
 import ChatPage from '@/pages/chat/ChatPage'
 import SessionsPage from '@/pages/sessions/SessionsPage'
+import ProfilePage from '@/pages/profile/ProfilePage'
+import SettingsPage from '@/pages/settings/SettingsPage'
 
 const queryClient = new QueryClient()
 
@@ -16,6 +19,22 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const isDark = useThemeStore((state) => state.isDark)
+  const { isAuthenticated, clearAuth } = useAuthStore()
+  const [authChecked, setAuthChecked] = useState(false)
+
+  // 启动时验证 token 有效性
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAuthChecked(true)
+      return
+    }
+    apiClient.get('/api/users/me')
+      .then(() => setAuthChecked(true))
+      .catch((err) => {
+        if (err.response?.status === 401) clearAuth()
+        setAuthChecked(true)
+      })
+  }, [])
 
   // 初始化主题
   useEffect(() => {
@@ -25,6 +44,8 @@ function App() {
       document.documentElement.classList.remove('dark')
     }
   }, [isDark])
+
+  if (!authChecked) return null
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -44,6 +65,22 @@ function App() {
             element={
               <PrivateRoute>
                 <SessionsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <ProfilePage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <PrivateRoute>
+                <SettingsPage />
               </PrivateRoute>
             }
           />

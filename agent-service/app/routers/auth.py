@@ -91,6 +91,17 @@ async def refresh_token(req: RefreshRequest, db: AsyncSession = Depends(get_db))
     )
 
 
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """获取当前登录用户信息"""
+    return {
+        "user_id": current_user.user_id,
+        "username": current_user.username,
+        "created_at": current_user.created_at,
+        "is_active": current_user.is_active,
+    }
+
+
 @router.post("/change-password")
 async def change_password(
     req: ChangePasswordRequest,

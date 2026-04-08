@@ -25,9 +25,9 @@ export default function LoginPage() {
       const payload: LoginRequest = { username, password }
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login'
       const response = await apiClient.post<LoginResponse>(endpoint, payload)
-      const { access_token, username: user } = response.data
+      const { access_token, username: user, user_id } = response.data
 
-      setAuth(access_token, user)
+      setAuth(access_token, user, user_id)
       navigate('/chat')
     } catch (err: any) {
       setError(err.response?.data?.detail || (isRegister ? '注册失败' : '登录失败，请检查用户名和密码'))

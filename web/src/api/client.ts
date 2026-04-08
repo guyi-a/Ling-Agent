@@ -25,9 +25,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token 过期，跳转到登录页
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('username')
+      import('@/stores/authStore').then(({ useAuthStore }) => {
+        useAuthStore.getState().clearAuth()
+      })
+      import('@/stores/profileStore').then(({ useProfileStore }) => {
+        useProfileStore.getState().clearProfile()
+      })
       window.location.href = '/login'
     }
     return Promise.reject(error)

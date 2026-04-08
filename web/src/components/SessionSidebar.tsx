@@ -3,6 +3,7 @@ import { Plus, MessageSquare, Trash2, Edit2, Check, X } from 'lucide-react'
 import { sessionsApi } from '@/api/sessions'
 import { useAuthStore } from '@/stores/authStore'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import UserProfileMenu from '@/components/UserProfileMenu'
 import type { Session } from '@/types'
 
 interface SessionSidebarProps {
@@ -194,6 +195,9 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
           </div>
         )}
       </div>
+
+      {/* User Profile Menu */}
+      <UserProfileMenu />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

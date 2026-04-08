@@ -35,6 +35,7 @@ export interface LoginResponse {
   refresh_token: string
   token_type: string
   username: string
+  user_id: string
 }
 
 // 聊天相关
