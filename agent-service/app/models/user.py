@@ -17,6 +17,7 @@ class User(Base):
     device_id = Column(String(100), index=True)
     device_model = Column(String(100))
     preferences = Column(Text)
+    avatar = Column(String(200))  # 头像文件名
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_active_at = Column(DateTime, default=datetime.utcnow)

@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db
 from app.crud.account import account_crud
 from app.core.security import create_access_token, create_refresh_token, decode_token
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from app.core.deps import get_current_user
+from app.models.user import User
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ChangePasswordRequest
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -87,3 +89,22 @@ async def refresh_token(req: RefreshRequest, db: AsyncSession = Depends(get_db))
         user_id=user_id,
         username=username,
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    req: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改密码（需要登录）"""
+    success = await account_crud.change_password(
+        db, current_user.user_id, req.old_password, req.new_password
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="旧密码错误"
+        )
+    logger.info(f"✓ 用户修改密码: {current_user.username}")
+    return {"status": "success", "message": "密码修改成功"}

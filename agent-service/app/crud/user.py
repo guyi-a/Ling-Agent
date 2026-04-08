@@ -10,6 +10,7 @@ import uuid
 import json
 
 from app.models.user import User
+from app.models.account import Account
 from app.schemas.user import UserCreate, UserUpdate
 
 
@@ -102,6 +103,15 @@ class UserCRUD:
             .where(User.user_id == user_id)
             .values(**update_data)
         )
+
+        # 同步更新 accounts 表的 username
+        if "username" in update_data:
+            await db.execute(
+                update(Account)
+                .where(Account.user_id == user_id)
+                .values(username=update_data["username"])
+            )
+
         await db.commit()
         
         # 返回更新后的用户

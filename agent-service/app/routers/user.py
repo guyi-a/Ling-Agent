@@ -1,13 +1,22 @@
 """
 用户管理路由
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import logging
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.database.session import get_db
 from app.crud.user import user_crud
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserWithSessions
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+AVATAR_DIR = os.path.join(settings.WORKSPACE_ROOT, "avatars")
+os.makedirs(AVATAR_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -148,6 +157,59 @@ async def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete user"
         )
+
+
+@router.post("/{user_id}/avatar")
+async def upload_avatar(
+    user_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """上传用户头像"""
+    user = await user_crud.get_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    # 验证文件类型
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="仅支持 JPEG/PNG/WebP/GIF 格式")
+
+    # 保存文件
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+    filename = f"{user_id}.{ext}"
+    filepath = os.path.join(AVATAR_DIR, filename)
+
+    # 删除旧头像
+    if user.avatar:
+        old_path = os.path.join(AVATAR_DIR, user.avatar)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # 更新数据库
+    user.avatar = filename
+    await db.commit()
+
+    logger.info(f"✓ 用户 {user_id} 上传头像: {filename}")
+    return {"status": "success", "avatar": filename}
+
+
+@router.get("/{user_id}/avatar")
+async def get_avatar(user_id: str, db: AsyncSession = Depends(get_db)):
+    """获取用户头像"""
+    user = await user_crud.get_by_id(db, user_id)
+    if not user or not user.avatar:
+        raise HTTPException(status_code=404, detail="头像不存在")
+
+    filepath = os.path.join(AVATAR_DIR, user.avatar)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="头像文件不存在")
+
+    return FileResponse(filepath)
 
 
 @router.get("/", response_model=List[UserResponse])

@@ -54,6 +54,22 @@ class AccountCRUD:
             return None
         return account
 
+    async def change_password(
+        self, db: AsyncSession, user_id: str, old_password: str, new_password: str
+    ) -> bool:
+        """修改密码，返回是否成功"""
+        result = await db.execute(
+            select(Account).where(Account.user_id == user_id)
+        )
+        account = result.scalars().first()
+        if not account:
+            return False
+        if not verify_password(old_password, account.hashed_password):
+            return False
+        account.hashed_password = hash_password(new_password)
+        await db.commit()
+        return True
+
     async def username_exists(self, db: AsyncSession, username: str) -> bool:
         """检查用户名是否已存在"""
         result = await db.execute(

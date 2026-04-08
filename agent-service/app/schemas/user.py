@@ -34,6 +34,7 @@ class UserResponse(BaseModel):
     device_id: str
     device_model: Optional[str]
     preferences: Optional[str]
+    avatar: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     last_active_at: datetime

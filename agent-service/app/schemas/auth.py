@@ -29,6 +29,12 @@ class TokenResponse(BaseModel):
     username: str
 
 
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求"""
+    old_password: str = Field(..., description="旧密码")
+    new_password: str = Field(..., min_length=6, description="新密码")
+
+
 class RefreshRequest(BaseModel):
     """刷新 Token 请求"""
     refresh_token: str
