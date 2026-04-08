@@ -94,7 +94,7 @@ cd web && npm run dev
 ```
 
 访问地址：
-- **前端**: http://localhost:5173
+- **前端**: http://localhost:5174
 - **后端 API**: http://localhost:9000
 - **API 文档**: http://localhost:9000/docs
 
