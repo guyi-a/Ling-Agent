@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { WorkspaceFile } from '@/types'
+import type { WorkspaceFile, ProjectInfo, TreeEntry } from '@/types'
 
 export const workspaceApi = {
   // 上传文件
@@ -30,5 +30,27 @@ export const workspaceApi = {
   // 删除文件
   deleteFile: async (sessionId: string, folder: string, filename: string) => {
     await apiClient.delete(`/api/workspace/${sessionId}/files/${folder}/${filename}`)
+  },
+
+  // 按路径下载文件（支持嵌套目录）
+  downloadByPathUrl: (sessionId: string, path: string) => {
+    return `/api/workspace/${sessionId}/download?path=${encodeURIComponent(path)}`
+  },
+
+  // 列出项目
+  listProjects: async (sessionId: string): Promise<ProjectInfo[]> => {
+    const { data } = await apiClient.get<{ session_id: string; projects: ProjectInfo[] }>(
+      `/api/workspace/${sessionId}/projects`
+    )
+    return data.projects
+  },
+
+  // 获取项目目录树
+  getProjectTree: async (sessionId: string, path: string): Promise<TreeEntry[]> => {
+    const { data } = await apiClient.get<{ session_id: string; root: string; entries: TreeEntry[] }>(
+      `/api/workspace/${sessionId}/tree`,
+      { params: { path } }
+    )
+    return data.entries
   },
 }

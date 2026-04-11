@@ -182,10 +182,14 @@ alembic/versions/*.py
 .app.db
 
 # Documentation (local only)
+docs/
 agent-service/docs/
 
 # Agent workspace (user uploaded files and generated outputs)
 agent-service/workspace/
+
+# Deployed apps
+agent-service/deployed/
 
 # Local documentation (for Claude Code context, not for repo)
 FEATURE_ROADMAP.md

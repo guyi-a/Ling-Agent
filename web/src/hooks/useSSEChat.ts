@@ -6,6 +6,9 @@ export interface MessagePart {
   content?: string  // for text
   toolName?: string  // for tool
   toolStatus?: 'pending' | 'done' | 'rejected'  // for tool
+  isSkill?: boolean  // Skill 工具标记
+  toolInput?: any    // 工具输入参数
+  toolOutput?: string // 工具输出结果
 }
 
 export interface Message {
@@ -214,9 +217,10 @@ export function useSSEChat() {
                 lastPartWasTool = true  // 标记最后一个 part 是 tool
 
                 // 如果是 Skill 工具，从 tool_input 中提取实际技能名
+                const isSkill = parsed.tool_name === 'Skill'
                 let displayName = parsed.tool_name
-                if (parsed.tool_name === 'Skill' && parsed.tool_input?.skill) {
-                  displayName = parsed.tool_input.skill
+                if (isSkill && parsed.tool_input?.command) {
+                  displayName = parsed.tool_input.command
                 }
 
                 setMessages((prev) =>
@@ -230,27 +234,27 @@ export function useSSEChat() {
                         {
                           type: 'tool',
                           toolName: displayName,
-                          toolStatus: 'pending' as const
+                          toolStatus: 'pending' as const,
+                          isSkill,
+                          toolInput: parsed.tool_input,
                         }
                       ]
                     }
                   })
                 )
               } else if (event === 'tool_end') {
-                // 工具完成
+                // 工具完成 — 找最后一个 pending 的工具标记为 done
                 setMessages((prev) =>
                   prev.map((msg) => {
                     if (msg.id !== aiMessageId) return msg
 
                     const parts = [...msg.parts]
-                    // 找到最后一个状态为 pending 的同名工具
                     for (let i = parts.length - 1; i >= 0; i--) {
                       if (
                         parts[i].type === 'tool' &&
-                        parts[i].toolName === parsed.tool_name &&
                         parts[i].toolStatus === 'pending'
                       ) {
-                        parts[i] = { ...parts[i], toolStatus: 'done' as const }
+                        parts[i] = { ...parts[i], toolStatus: 'done' as const, toolOutput: parsed.tool_output }
                         break
                       }
                     }
@@ -378,6 +382,7 @@ export function useSSEChat() {
     messages,
     isStreaming,
     currentSessionId,
+    setCurrentSessionId,
     sendMessage,
     stopStreaming,
     setMessages,

@@ -27,6 +27,7 @@ HIGH_RISK_TOOLS: set[str] = {
     "run_command",
     "python_repl",
     "write_file",
+    "dev_run",
 }
 
 # ── 内存存储 ──────────────────────────────────────────

@@ -57,6 +57,17 @@ export interface ChatResponse {
   is_new_session: boolean
 }
 
+// Dev 进程
+export interface DevProcess {
+  name: string
+  command: string[]
+  workdir: string
+  port: number | null
+  pid: number | null
+  status: 'starting' | 'running' | 'exited'
+  exit_code: number | null
+}
+
 // 工作区文件
 export interface WorkspaceFile {
   name: string
@@ -64,4 +75,21 @@ export interface WorkspaceFile {
   folder: string
   size: number
   modified_at: number
+}
+
+// 项目信息
+export interface ProjectInfo {
+  name: string
+  path: string
+  file_count: number
+  total_size: number
+}
+
+// 目录树节点
+export interface TreeEntry {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  size?: number
+  children?: TreeEntry[]
 }

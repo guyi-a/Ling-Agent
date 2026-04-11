@@ -16,10 +16,14 @@ class Settings(BaseSettings):
     # LLM Configuration
     DASHSCOPE_API_KEY: Optional[str] = None
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL: str = "qwen-vl-max"  # 多模态模型（支持图像+文本）
+    LLM_MODEL: str = "qwen3.5-plus"  # 最新最强模型
 
     # Workspace Configuration
     WORKSPACE_ROOT: str = "./workspace"
+
+    # Dev Services
+    DEV_PORT_RANGE_START: int = 9100
+    DEV_PORT_RANGE_END: int = 9199
 
     # Memory Configuration
     MEMORY_MAX_TOKENS: int = 2000
@@ -32,7 +36,7 @@ class Settings(BaseSettings):
     # JWT Configuration
     JWT_SECRET_KEY: str = "change-this-secret-key-in-production"
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 天
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     class Config:

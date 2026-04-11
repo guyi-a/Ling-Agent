@@ -212,9 +212,9 @@ async def chat_stream(
                 elif chunk_type == "model_start":
                     yield sse("model_start", {})
                 elif chunk_type == "tool_start":
-                    yield sse("tool_start", {"tool_name": chunk["tool_name"]})
+                    yield sse("tool_start", {"tool_name": chunk["tool_name"], "tool_input": chunk.get("tool_input", {})})
                 elif chunk_type == "tool_end":
-                    yield sse("tool_end", {"tool_name": chunk["tool_name"]})
+                    yield sse("tool_end", {"tool_name": chunk["tool_name"], "tool_output": chunk.get("tool_output", "")})
                 elif chunk_type == "approval_required":
                     yield sse("approval_required", {
                         "request_id": chunk["request_id"],

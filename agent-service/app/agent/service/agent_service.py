@@ -17,7 +17,7 @@ from app.agent.infra.llm_factory import get_llm
 from app.agent.tools.registry import get_all_tools, set_session_id
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
-from app.core.approval import request_approval, make_request_id
+from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS
 
 logger = logging.getLogger(__name__)
 
@@ -543,7 +543,7 @@ Always be concise and direct in your responses."""
                         tool_call_id = executed_ids.pop(0) if executed_ids else ""
                         if tool_call_id:
                             await self._save_tool_message(db, session_id, tool_name, result_text, tool_call_id)
-                        yield {"type": "tool_end", "tool_name": tool_name}
+                        yield {"type": "tool_end", "tool_name": tool_name, "tool_output": result_text}
 
                 # 无 tool_call 轮次直接结束
                 if not last_round_saved_as_tool_call:
@@ -554,8 +554,15 @@ Always be concise and direct in your responses."""
                     # 全部工具都执行了（on_tool_start 把 id 移走了），正常结束
                     break
 
-                # interrupt 了：从 pending_tc_list 里取被拦截的工具信息
-                intercepted = pending_tc_list[len(pending_tc_list) - len(pending_tool_call_ids)]
+                # interrupt 了：只有 HIGH_RISK_TOOLS 才真正需要审批 decision
+                # 其余工具（list_dir, read_file 等）会在 resume 时自动执行
+                pending_ids_set = set(pending_tool_call_ids)
+                hanging_tools = [
+                    tc for tc in pending_tc_list
+                    if tc["id"] in pending_ids_set and tc["name"] in HIGH_RISK_TOOLS
+                ]
+                num_pending = len(hanging_tools) if hanging_tools else len(pending_tool_call_ids)
+                intercepted = hanging_tools[0] if hanging_tools else pending_tc_list[-1]
                 tool_name = intercepted.get("name", "unknown")
                 tool_input = intercepted.get("args", {})
 
@@ -565,6 +572,7 @@ Always be concise and direct in your responses."""
                     "request_id": request_id,
                     "tool_name": tool_name,
                     "tool_input": tool_input,
+                    "pending_count": num_pending,
                 }
 
                 approved = await request_approval(request_id)
@@ -582,10 +590,12 @@ Always be concise and direct in your responses."""
                     # 删除 checkpointer 里该 thread 的状态，彻底防止下次 session 重新 resume 旧中断
                     await get_checkpointer().adelete_thread(session_id)
                     # 不 resume，直接输出取消提示并结束
-                    yield {"type": "token", "text": f"好的，已取消 `{tool_name}` 操作。"}
+                    yield {"type": "token", "text": f"好的，已取消操作。"}
                     break
                 else:
-                    run_input = Command(resume={"decisions": [{"type": "approve"}]})
+                    # 对所有被拦截的工具都发 approve decision
+                    decisions = [{"type": "approve"} for _ in range(num_pending)]
+                    run_input = Command(resume={"decisions": decisions})
 
             # 保存最终 assistant 消息
             assistant_message_id = None
@@ -624,8 +634,16 @@ Always be concise and direct in your responses."""
 
         except Exception as e:
             logger.error(f"stream_message error: {e}", exc_info=True)
-            yield {"type": "token", "text": f"\n\n[错误: {e}]"}
+            error_msg = f"\n\n⚠️ 发生错误: {e}"
+            yield {"type": "token", "text": error_msg}
+
+            # 保存已生成内容 + 错误信息到数据库
             assistant_message_id = None
+            try:
+                save_content = f"{full_response}{error_msg}" if full_response else error_msg.strip()
+                assistant_message_id = await self._save_assistant_message(db, session_id, save_content)
+            except Exception as save_err:
+                logger.warning(f"保存错误消息失败: {save_err}")
 
         finally:
             # 清理活跃任务记录

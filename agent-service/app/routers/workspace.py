@@ -111,6 +111,112 @@ async def list_files(
     return {"session_id": session_id, "files": result}
 
 
+@router.get("/{session_id}/projects")
+async def list_projects(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出 outputs/projects/ 下的所有项目目录"""
+    await _check_session_owner(session_id, current_user, db)
+
+    workspace = _get_session_workspace(session_id)
+    projects_dir = workspace / "outputs" / "projects"
+
+    result = []
+    if projects_dir.is_dir():
+        for item in sorted(projects_dir.iterdir()):
+            if item.is_dir():
+                # 统计文件数和总大小
+                file_count = 0
+                total_size = 0
+                for f in item.rglob("*"):
+                    if f.is_file():
+                        file_count += 1
+                        total_size += f.stat().st_size
+                result.append({
+                    "name": item.name,
+                    "path": f"outputs/projects/{item.name}",
+                    "file_count": file_count,
+                    "total_size": total_size,
+                })
+
+    return {"session_id": session_id, "projects": result}
+
+
+@router.get("/{session_id}/tree")
+async def get_tree(
+    session_id: str,
+    path: str = "outputs/projects",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取指定目录的树形结构（递归）"""
+    await _check_session_owner(session_id, current_user, db)
+
+    workspace = _get_session_workspace(session_id).resolve()
+    target = (workspace / path).resolve()
+
+    # 安全检查：必须在 workspace 内
+    if not target.is_relative_to(workspace):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径越界")
+    if not target.is_dir():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目录不存在")
+
+    def _build_tree(directory: Path, rel_base: Path) -> list:
+        entries = []
+        for item in sorted(directory.iterdir(), key=lambda x: (x.is_file(), x.name)):
+            rel_path = str(item.relative_to(rel_base))
+            if item.is_dir():
+                entries.append({
+                    "name": item.name,
+                    "path": rel_path,
+                    "type": "dir",
+                    "children": _build_tree(item, rel_base),
+                })
+            else:
+                entries.append({
+                    "name": item.name,
+                    "path": rel_path,
+                    "type": "file",
+                    "size": item.stat().st_size,
+                })
+        return entries
+
+    return {
+        "session_id": session_id,
+        "root": path,
+        "entries": _build_tree(target, workspace),
+    }
+
+
+@router.get("/{session_id}/download")
+async def download_by_path(
+    session_id: str,
+    path: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """通过相对路径下载工作区文件（支持嵌套目录）"""
+    await _check_session_owner(session_id, current_user, db)
+
+    workspace = _get_session_workspace(session_id).resolve()
+    file_path = (workspace / path).resolve()
+
+    # 安全检查：必须在 workspace 内
+    if not file_path.is_relative_to(workspace):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径越界")
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    return FileResponse(
+        path=str(file_path),
+        filename=file_path.name,
+        media_type=media_type or "application/octet-stream",
+    )
+
+
 @router.get("/{session_id}/files/{folder}/{filename}")
 async def download_file(
     session_id: str,

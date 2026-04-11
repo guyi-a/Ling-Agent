@@ -1,18 +1,27 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageSquare, Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon } from 'lucide-react'
+import { MessageSquare, Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSSEChat, getMessageContent, type MessagePart } from '@/hooks/useSSEChat'
 import { useThemeStore } from '@/stores/themeStore'
 import SessionSidebar from '@/components/SessionSidebar'
 import WorkspacePanel from '@/components/WorkspacePanel'
+import PreviewPanel from '@/components/PreviewPanel'
 import ApprovalCard from '@/components/ApprovalCard'
 import FileSelector from '@/components/FileSelector'
 import AttachmentChip from '@/components/AttachmentChip'
 import MessageActions from '@/components/MessageActions'
 import { chatApi } from '@/api/chat'
 import { messagesApi } from '@/api/messages'
+import { workspaceApi } from '@/api/workspace'
 import type { WorkspaceFile } from '@/types'
+
+interface PastedImage {
+  file: File
+  previewUrl: string
+  uploading: boolean
+  uploadedPath?: string
+}
 
 export default function ChatPage() {
   const [message, setMessage] = useState('')
@@ -21,8 +30,13 @@ export default function ChatPage() {
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewTitle, setPreviewTitle] = useState('')
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null)
+  const [pastedImages, setPastedImages] = useState<PastedImage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { messages, isStreaming, currentSessionId, sendMessage, stopStreaming, setMessages } = useSSEChat()
+  const { messages, isStreaming, currentSessionId, setCurrentSessionId, sendMessage, stopStreaming, setMessages } = useSSEChat()
   const { isDark, toggleTheme } = useThemeStore()
 
   // 加载会话历史消息
@@ -52,15 +66,18 @@ export default function ChatPage() {
           }
           extraData.tool_calls.forEach((tc: any) => {
             // 如果是 Skill 工具，从 args 中提取实际技能名
+            const isSkill = tc.name === 'Skill'
             let displayName = tc.name
-            if (tc.name === 'Skill' && tc.args?.skill) {
-              displayName = tc.args.skill
+            if (isSkill && tc.args?.command) {
+              displayName = tc.args.command
             }
 
             parts.push({
               type: 'tool' as const,
               toolName: displayName,
-              toolStatus: 'done' as const  // 历史消息中的工具都是已完成的
+              toolStatus: 'done' as const,  // 历史消息中的工具都是已完成的
+              isSkill,
+              toolInput: tc.args,
             })
           })
         } else {
@@ -100,8 +117,55 @@ export default function ChatPage() {
     }
   }, [setMessages])
 
+  // 粘贴图片处理
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const sessionId = selectedSessionId || currentSessionId
+    if (!sessionId) return
+
+    for (const item of Array.from(items)) {
+      if (!item.type.startsWith('image/')) continue
+
+      const file = item.getAsFile()
+      if (!file) continue
+
+      e.preventDefault()
+
+      const previewUrl = URL.createObjectURL(file)
+
+      // 先添加预览（uploading 状态）
+      const newImage: PastedImage = { file, previewUrl, uploading: true }
+      setPastedImages(prev => [...prev, newImage])
+
+      // 上传到后端
+      try {
+        const result = await workspaceApi.upload(sessionId, file)
+        setPastedImages(prev =>
+          prev.map(img =>
+            img.previewUrl === previewUrl
+              ? { ...img, uploading: false, uploadedPath: result.path }
+              : img
+          )
+        )
+      } catch (err) {
+        console.error('图片上传失败:', err)
+        URL.revokeObjectURL(previewUrl)
+        setPastedImages(prev => prev.filter(img => img.previewUrl !== previewUrl))
+      }
+    }
+  }, [selectedSessionId, currentSessionId])
+
+  // 移除粘贴的图片
+  const removePastedImage = useCallback((previewUrl: string) => {
+    URL.revokeObjectURL(previewUrl)
+    setPastedImages(prev => prev.filter(img => img.previewUrl !== previewUrl))
+  }, [])
+
   const handleSend = () => {
-    if (!message.trim() || isStreaming) return
+    if (!message.trim() && pastedImages.filter(p => p.uploadedPath).length === 0) return
+    if (isStreaming) return
 
     // 构建 attachments 参数
     const attachments = selectedFiles.map(file => {
@@ -115,9 +179,19 @@ export default function ChatPage() {
       }
     })
 
-    sendMessage(message, attachments.length > 0 ? attachments : undefined, selectedSessionId || undefined)
+    // 合并粘贴图片的 attachments
+    const imageAttachments = pastedImages
+      .filter(img => img.uploadedPath)
+      .map(img => ({ type: 'image' as const, path: img.uploadedPath! }))
+
+    const allAttachments = [...attachments, ...imageAttachments]
+
+    sendMessage(message || '(图片)', allAttachments.length > 0 ? allAttachments : undefined, selectedSessionId || undefined)
     setMessage('')
-    setSelectedFiles([])  // 清空选中文件
+    setSelectedFiles([])
+    // 清理粘贴图片预览
+    pastedImages.forEach(img => URL.revokeObjectURL(img.previewUrl))
+    setPastedImages([])
   }
 
   // 复制消息
@@ -165,7 +239,9 @@ export default function ChatPage() {
       setMessages(prev => prev.filter(m => m.messageId !== messageId))
 
       // 4. 重新发送用户消息
-      sendMessage(prevUserMsg.content, undefined, selectedSessionId || undefined)
+      const userContent = getMessageContent(prevUserMsg)
+      if (!userContent.trim()) return
+      sendMessage(userContent, undefined, selectedSessionId || undefined)
     } catch (error) {
       console.error('重新生成失败:', error)
       alert('重新生成失败，请重试')
@@ -220,32 +296,35 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // 切换会话时加载历史消息
-  useEffect(() => {
-    if (selectedSessionId && selectedSessionId !== currentSessionId) {
-      loadSessionHistory(selectedSessionId)
-    } else if (!selectedSessionId && !currentSessionId) {
-      // 只有在没有任何会话时才清空消息
-      setMessages([])
-    }
-  }, [selectedSessionId, currentSessionId, loadSessionHistory, setMessages])
-
-  // 当新会话被创建时，更新 selectedSessionId
+  // 当新会话被创建时（SSE 返回 session_id），同步 selectedSessionId
   useEffect(() => {
     if (currentSessionId && currentSessionId !== selectedSessionId) {
       setSelectedSessionId(currentSessionId)
     }
   }, [currentSessionId, selectedSessionId])
 
-  const handleSessionSelect = (sessionId: string | null) => {
+  const handleSessionSelect = async (sessionId: string | null) => {
+    // 已经是当前会话，不重复操作
+    const activeSessionId = selectedSessionId ?? currentSessionId
+    if (sessionId === activeSessionId) return
+
     setSelectedSessionId(sessionId)
+    setCurrentSessionId(sessionId)
+    setPreviewUrl(null)
+    setPreviewTitle('')
+
+    if (sessionId) {
+      await loadSessionHistory(sessionId)
+    } else {
+      setMessages([])
+    }
   }
 
   return (
     <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
       {/* Left Sidebar - Sessions */}
       <SessionSidebar
-        currentSessionId={currentSessionId || selectedSessionId}
+        currentSessionId={selectedSessionId ?? currentSessionId}
         onSelectSession={handleSessionSelect}
         onSessionsChange={() => {
           // 会话列表变化时的回调
@@ -286,8 +365,17 @@ export default function ChatPage() {
           </div>
         </header>
 
-        {/* Messages */}
-        <main className="flex-1 overflow-y-auto p-4 relative">
+        {/* Preview Panel — 有预览时占满，隐藏聊天区 */}
+        {previewUrl && (
+          <PreviewPanel
+            url={previewUrl}
+            title={previewTitle}
+            onClose={() => { setPreviewUrl(null); setPreviewTitle('') }}
+          />
+        )}
+
+        {/* Messages — 预览时隐藏 */}
+        <main className={`${previewUrl ? 'hidden' : 'flex-1'} overflow-y-auto p-4 relative`}>
           {/* 浮动气泡背景 */}
           <div className="floating-bubbles">
             <div className="bubble"></div>
@@ -299,9 +387,73 @@ export default function ChatPage() {
 
           <div className="max-w-4xl mx-auto space-y-4 relative z-10">
             {messages.length === 0 ? (
-              <div className="text-center text-gray-500 dark:text-gray-400 py-20">
+              <div className="text-center text-gray-500 dark:text-gray-400 py-16">
                 <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                <p>开始与 AI 助手对话</p>
+                <p className="mb-8">开始与 AI 助手对话</p>
+                <div className="grid grid-cols-2 gap-3 max-w-2xl mx-auto">
+                  {[
+                    { icon: '🌐', title: '搜索资讯', cases: [
+                      '搜索一下最近有什么重大的 AI 新闻，帮我整理成摘要',
+                      '帮我搜索最新的科技行业融资动态',
+                      '搜一下今年最值得关注的开源项目有哪些',
+                    ]},
+                    { icon: '📝', title: '生成文档', cases: [
+                      '帮我生成一份唐诗宋词精选集 PDF，要排版精美',
+                      '帮我写一份产品需求文档（PRD）模板',
+                      '生成一份周报模板，包含本周完成、下周计划和风险项',
+                    ]},
+                    { icon: '💻', title: '开发应用', cases: [
+                      '帮我做一个番茄钟计时器，有倒计时动画、专注统计和历史记录',
+                      '做一个个人记账本，能记录收支、按分类统计、显示月度图表',
+                      '帮我做一个天气仪表盘，展示实时天气、温度趋势和空气质量',
+                    ]},
+                    { icon: '📊', title: '分析数据', cases: [
+                      '帮我分析上传的 CSV 数据，生成可视化图表和分析报告',
+                      '帮我清洗数据，去除重复值和异常值，输出数据质量报告',
+                      '帮我做一个销售数据的月度趋势分析，找出增长和下滑的关键原因',
+                    ]},
+                  ].map((item) => {
+                    const isExpanded = expandedSuggestion === item.title
+                    return (
+                      <div
+                        key={item.title}
+                        className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm overflow-hidden flex flex-col"
+                      >
+                        {/* Header: icon + title + expand toggle */}
+                        <div
+                          className="flex items-center gap-2 px-5 pt-4 pb-2 cursor-pointer hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors"
+                          onClick={() => setExpandedSuggestion(isExpanded ? null : item.title)}
+                        >
+                          <span className="text-xl">{item.icon}</span>
+                          <span className="text-base font-medium text-gray-800 dark:text-gray-200">{item.title}</span>
+                          <ChevronRight className={`w-4 h-4 ml-auto text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                        </div>
+
+                        {/* Cases list */}
+                        <div className="px-3 pb-3 space-y-1 flex-1 flex flex-col">
+                          {/* First case — always visible */}
+                          <button
+                            onClick={() => { setMessage(item.cases[0]); setExpandedSuggestion(null) }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-300 transition-colors leading-relaxed flex-1"
+                          >
+                            {item.cases[0]}
+                          </button>
+
+                          {/* More cases — shown when expanded */}
+                          {isExpanded && item.cases.slice(1).map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => { setMessage(c); setExpandedSuggestion(null) }}
+                              className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-300 transition-colors leading-relaxed"
+                            >
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             ) : (
               messages.map((msg, idx) => (
@@ -373,25 +525,75 @@ export default function ChatPage() {
                             }
 
                             if (part.type === 'tool') {
+                              const toolKey = `${msg.id}-${partIdx}`
+                              const isExpanded = expandedTools.has(toolKey)
+                              const canExpand = !part.isSkill && part.toolStatus === 'done' && (part.toolInput || part.toolOutput)
+
                               return (
-                                <div key={partIdx} className="flex items-center gap-2 px-3 py-2 my-2 bg-gray-100 dark:bg-gray-700 rounded-md text-sm not-prose">
-                                  {part.toolStatus === 'pending' && (
-                                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                <div key={partIdx} className="my-2 not-prose">
+                                  <div
+                                    className={`flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-sm ${canExpand ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''} ${isExpanded ? 'rounded-t-md' : 'rounded-md'}`}
+                                    onClick={() => {
+                                      if (!canExpand) return
+                                      setExpandedTools(prev => {
+                                        const next = new Set(prev)
+                                        if (next.has(toolKey)) next.delete(toolKey)
+                                        else next.add(toolKey)
+                                        return next
+                                      })
+                                    }}
+                                  >
+                                    {part.toolStatus === 'pending' && (
+                                      <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                    )}
+                                    {part.toolStatus === 'done' && (
+                                      <CheckCircle className="w-4 h-4 text-green-500" />
+                                    )}
+                                    {part.toolStatus === 'rejected' && (
+                                      <Clock className="w-4 h-4 text-orange-500" />
+                                    )}
+                                    <span className="font-mono text-gray-700 dark:text-gray-300">
+                                      {part.toolName}
+                                    </span>
+                                    <span className="text-gray-500 dark:text-gray-400">
+                                      {part.isSkill ? (
+                                        <>
+                                          {part.toolStatus === 'pending' && '加载中...'}
+                                          {part.toolStatus === 'done' && '加载完成'}
+                                          {part.toolStatus === 'rejected' && '等待审批'}
+                                        </>
+                                      ) : (
+                                        <>
+                                          {part.toolStatus === 'pending' && '调用中...'}
+                                          {part.toolStatus === 'done' && '调用成功'}
+                                          {part.toolStatus === 'rejected' && '等待审批'}
+                                        </>
+                                      )}
+                                    </span>
+                                    {canExpand && (
+                                      <ChevronRight className={`w-4 h-4 ml-auto text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                    )}
+                                  </div>
+                                  {isExpanded && (
+                                    <div className="border border-t-0 border-gray-200 dark:border-gray-600 rounded-b-md bg-gray-50 dark:bg-gray-800 px-3 py-2 text-xs">
+                                      {part.toolInput && Object.keys(part.toolInput).length > 0 && (
+                                        <div className="mb-2">
+                                          <div className="text-gray-400 dark:text-gray-500 mb-1 font-medium">输入</div>
+                                          <pre className="whitespace-pre-wrap break-all text-gray-600 dark:text-gray-300 font-mono bg-gray-100 dark:bg-gray-700 rounded p-2 max-h-40 overflow-auto">
+                                            {JSON.stringify(part.toolInput, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                      {part.toolOutput && (
+                                        <div>
+                                          <div className="text-gray-400 dark:text-gray-500 mb-1 font-medium">输出</div>
+                                          <pre className="whitespace-pre-wrap break-all text-gray-600 dark:text-gray-300 font-mono bg-gray-100 dark:bg-gray-700 rounded p-2 max-h-40 overflow-auto">
+                                            {part.toolOutput.length > 500 ? part.toolOutput.slice(0, 500) + '...' : part.toolOutput}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
-                                  {part.toolStatus === 'done' && (
-                                    <CheckCircle className="w-4 h-4 text-green-500" />
-                                  )}
-                                  {part.toolStatus === 'rejected' && (
-                                    <Clock className="w-4 h-4 text-orange-500" />
-                                  )}
-                                  <span className="font-mono text-gray-700 dark:text-gray-300">
-                                    {part.toolName}
-                                  </span>
-                                  <span className="text-gray-500 dark:text-gray-400">
-                                    {part.toolStatus === 'pending' && '执行中...'}
-                                    {part.toolStatus === 'done' && '完成'}
-                                    {part.toolStatus === 'rejected' && '等待审批'}
-                                  </span>
                                 </div>
                               )
                             }
@@ -454,15 +656,31 @@ export default function ChatPage() {
         {/* Input */}
         <footer className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
           <div className="max-w-4xl mx-auto">
-            {/* 附件卡片展示区 */}
-            {selectedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
+            {/* 附件和粘贴图片预览区 */}
+            {(selectedFiles.length > 0 || pastedImages.length > 0) && (
+              <div className="flex flex-wrap items-center gap-2 mb-3 ml-11">
                 {selectedFiles.map(file => (
                   <AttachmentChip
                     key={file.path}
                     file={file}
                     onRemove={() => setSelectedFiles(prev => prev.filter(f => f.path !== file.path))}
                   />
+                ))}
+                {pastedImages.map((img) => (
+                  <div key={img.previewUrl} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 flex-shrink-0">
+                    <img src={img.previewUrl} className="w-full h-full object-cover" alt="粘贴的图片" />
+                    {img.uploading && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removePastedImage(img.previewUrl)}
+                      className="absolute top-0.5 right-0.5 p-0.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -482,13 +700,14 @@ export default function ChatPage() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                placeholder="发消息与 AI 助手对话..."
+                onPaste={handlePaste}
+                placeholder="发消息与 AI 助手对话...（支持粘贴图片）"
                 disabled={isStreaming}
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 onClick={handleSend}
-                disabled={!message.trim() || isStreaming}
+                disabled={(!message.trim() && pastedImages.filter(p => p.uploadedPath).length === 0) || isStreaming}
                 className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
               >
                 <Send className="w-5 h-5" />
@@ -499,11 +718,15 @@ export default function ChatPage() {
       </div>
 
       {/* Right Sidebar - Workspace */}
-      <WorkspacePanel sessionId={currentSessionId || selectedSessionId} isStreaming={isStreaming} />
+      <WorkspacePanel
+        sessionId={selectedSessionId ?? currentSessionId}
+        isStreaming={isStreaming}
+        onOpenPreview={(url, title) => { setPreviewUrl(url); setPreviewTitle(title) }}
+      />
 
       {/* File Selector Modal */}
       <FileSelector
-        sessionId={currentSessionId || selectedSessionId}
+        sessionId={selectedSessionId ?? currentSessionId}
         open={fileSelectorOpen}
         onClose={() => setFileSelectorOpen(false)}
         onSelect={(files) => {

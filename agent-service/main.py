@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from app.models import *
 
 # 导入路由
-from app.routers import auth_router, user_router, session_router, message_router, chat_router, workspace_router
+from app.routers import auth_router, user_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router
 
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # 关闭时可以执行清理操作
+    # 进程独立运行，主服务重启不影响
 
 # 创建FastAPI应用实例
 app = FastAPI(
@@ -93,9 +93,12 @@ async def log_requests(request: Request, call_next):
     # 过滤掉定时轮询请求（减少日志噪音）
     is_polling = (
         method == "GET" and
-        path.startswith("/api/workspace/") and
-        path.endswith("/files") and
-        200 <= response.status_code < 300
+        200 <= response.status_code < 300 and
+        (
+            (path.startswith("/api/workspace/") and path.endswith(("/files", "/projects"))) or
+            (path.startswith("/api/dev/") and ("/processes" in path or "/logs/" in path)) or
+            path.startswith("/api/preview/")
+        )
     )
 
     if is_polling:
@@ -110,7 +113,7 @@ async def log_requests(request: Request, call_next):
     log_msg += f" → {status_code} ({duration:.2f}ms) [{client}]"
 
     # 根据状态码选择日志级别
-    if 200 <= status_code < 300:
+    if 200 <= status_code < 400:
         logger.info(log_msg)
     elif 400 <= status_code < 500:
         logger.warning(log_msg)
@@ -135,6 +138,8 @@ app.include_router(session_router)
 app.include_router(message_router)
 app.include_router(chat_router)
 app.include_router(workspace_router)
+app.include_router(dev_router)
+app.include_router(preview_router)
 
 # 挂载前端静态文件
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
@@ -167,4 +172,10 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        reload_dirs=["app"] if settings.DEBUG else None,
+    )

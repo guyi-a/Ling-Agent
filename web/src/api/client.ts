@@ -20,11 +20,13 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// 响应拦截器：处理错误
+// 响应拦截器：处理 401（防抖，避免并发请求同时触发跳转）
+let isRedirecting = false
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !isRedirecting) {
+      isRedirecting = true
       import('@/stores/authStore').then(({ useAuthStore }) => {
         useAuthStore.getState().clearAuth()
       })

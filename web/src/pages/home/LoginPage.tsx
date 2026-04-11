@@ -22,8 +22,10 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const payload: LoginRequest = { username, password }
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login'
+      const payload = isRegister
+        ? { username, password, device_id: `web-${crypto.randomUUID()}` }
+        : { username, password }
       const response = await apiClient.post<LoginResponse>(endpoint, payload)
       const { access_token, username: user, user_id } = response.data
 

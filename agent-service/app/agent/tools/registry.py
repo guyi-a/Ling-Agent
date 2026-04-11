@@ -21,6 +21,7 @@ from app.agent.tools.shell_tool import ShellTool
 from app.agent.tools.python_repl_tool import PythonReplTool
 from app.agent.tools.font_tool import InstallNotoSansSCTool
 from app.agent.tools.browser_tool import InstallBrowserUseTool, BrowserUseTool
+from app.agent.tools.dev_tool import DevRunTool, DevStopTool, DevRestartTool, DevLogsTool
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ _shell_tool = ShellTool()
 _python_repl_tool = PythonReplTool()
 _install_browser_use_tool = InstallBrowserUseTool()
 _browser_use_tool = BrowserUseTool()
+_dev_run_tool = DevRunTool()
+_dev_stop_tool = DevStopTool()
+_dev_restart_tool = DevRestartTool()
+_dev_logs_tool = DevLogsTool()
 
 
 def set_session_id(session_id: str) -> None:
@@ -42,6 +47,10 @@ def set_session_id(session_id: str) -> None:
     _shell_tool.current_session_id = session_id
     _python_repl_tool.current_session_id = session_id
     _browser_use_tool.current_session_id = session_id
+    _dev_run_tool.current_session_id = session_id
+    _dev_stop_tool.current_session_id = session_id
+    _dev_restart_tool.current_session_id = session_id
+    _dev_logs_tool.current_session_id = session_id
 
 
 def get_all_tools() -> List[BaseTool]:
@@ -67,6 +76,10 @@ def get_all_tools() -> List[BaseTool]:
         InstallNotoSansSCTool(),
         WebFetchTool(),
         WebSearchTool(),
+        _dev_run_tool,
+        _dev_stop_tool,
+        _dev_restart_tool,
+        _dev_logs_tool,
     ]
 
     skill_tool = create_skill_tool()

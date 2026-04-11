@@ -1,23 +1,37 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Upload, Download, Trash2, FileText, Image as ImageIcon, File, Eye, X, RefreshCw, Package } from 'lucide-react'
+import { Upload, Download, Trash2, FileText, Image as ImageIcon, File, Eye, X, RefreshCw, Package, FolderOpen, Folder, ChevronDown, ChevronRight, Play, Square, Loader2, RotateCw } from 'lucide-react'
 import { workspaceApi } from '@/api/workspace'
+import { devApi } from '@/api/dev'
 import { useAuthStore } from '@/stores/authStore'
-import type { WorkspaceFile } from '@/types'
+import type { WorkspaceFile, ProjectInfo, TreeEntry, DevProcess } from '@/types'
 
 interface WorkspacePanelProps {
   sessionId: string | null
   isStreaming?: boolean
+  onOpenPreview?: (url: string, title: string) => void
 }
 
-export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePanelProps) {
+export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }: WorkspacePanelProps) {
   const [uploadFiles, setUploadFiles] = useState<WorkspaceFile[]>([])
   const [outputFiles, setOutputFiles] = useState<WorkspaceFile[]>([])
+  const [projects, setProjects] = useState<ProjectInfo[]>([])
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
+  const [projectTrees, setProjectTrees] = useState<Record<string, TreeEntry[]>>({})
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
+  const [processes, setProcesses] = useState<DevProcess[]>([])
+  const [startingProjects, setStartingProjects] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [previewFile, setPreviewFile] = useState<WorkspaceFile | null>(null)
   const [previewContent, setPreviewContent] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const token = useAuthStore((state) => state.token)
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }, [])
 
   // 清理 object URL
   const closePreview = useCallback(() => {
@@ -61,10 +75,139 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
     }
   }, [sessionId])
 
-  // 初始加载
+  const loadProjects = useCallback(async () => {
+    if (!sessionId) {
+      setProjects([])
+      return
+    }
+    try {
+      const data = await workspaceApi.listProjects(sessionId)
+      setProjects(prev => {
+        if (prev.length !== data.length) return data
+        const same = prev.every((p, i) => p.name === data[i]?.name && p.file_count === data[i]?.file_count && p.total_size === data[i]?.total_size)
+        return same ? prev : data
+      })
+    } catch {
+      // 静默失败
+    }
+  }, [sessionId])
+
+  const toggleProject = async (projectName: string) => {
+    const next = new Set(expandedProjects)
+    if (next.has(projectName)) {
+      next.delete(projectName)
+    } else {
+      next.add(projectName)
+      // 加载目录树
+      if (sessionId) {
+        try {
+          const tree = await workspaceApi.getProjectTree(sessionId, `outputs/projects/${projectName}`)
+          setProjectTrees(prev => ({ ...prev, [projectName]: tree }))
+        } catch {
+          setProjectTrees(prev => ({ ...prev, [projectName]: [] }))
+        }
+      }
+    }
+    setExpandedProjects(next)
+  }
+
+  const loadProcesses = useCallback(async () => {
+    if (!sessionId) { setProcesses([]); return }
+    try {
+      const data = await devApi.listProcesses(sessionId)
+      setProcesses(data)
+    } catch { /* 静默 */ }
+  }, [sessionId])
+
+  // 根据项目名找到对应进程
+  const getProjectProcess = (projName: string): DevProcess | undefined => {
+    return processes.find(p => p.name === `${projName}-server`)
+  }
+
+  const handleStartServer = async (proj: ProjectInfo) => {
+    if (!sessionId) return
+    setStartingProjects(prev => new Set(prev).add(proj.name))
+    try {
+      await devApi.startProcess(sessionId, {
+        name: `${proj.name}-server`,
+        command: 'python -m uvicorn main:app --host 127.0.0.1',
+        workdir: proj.path,
+      })
+      await loadProcesses()
+    } catch (error: any) {
+      console.error('启动服务失败:', error)
+      const detail = error?.response?.data?.detail || '启动服务失败，请重试'
+      showToast(detail)
+    } finally {
+      setStartingProjects(prev => {
+        const next = new Set(prev)
+        next.delete(proj.name)
+        return next
+      })
+    }
+  }
+
+  const handleStopServer = async (proj: ProjectInfo) => {
+    if (!sessionId) return
+    try {
+      await devApi.stopProcess(sessionId, `${proj.name}-server`)
+      await loadProcesses()
+    } catch (error) {
+      console.error('停止服务失败:', error)
+    }
+  }
+
+  const handleRestartServer = async (proj: ProjectInfo) => {
+    if (!sessionId) return
+    try {
+      await devApi.restartProcess(sessionId, `${proj.name}-server`)
+      await loadProcesses()
+    } catch (error) {
+      console.error('重启服务失败:', error)
+      showToast('重启服务失败')
+    }
+  }
+
+  const toggleDir = (path: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
+
+  // sessionId 变化时静默加载新数据（不清空、不显示 loading，避免闪烁）
+  const prevSessionRef = useRef<string | null>(null)
   useEffect(() => {
-    loadFiles(true)
-  }, [loadFiles])
+    const isSwitch = sessionId !== prevSessionRef.current
+    prevSessionRef.current = sessionId
+
+    if (isSwitch && sessionId) {
+      // 切换会话：静默加载，到达后直接替换，不显示 loading
+      loadFiles()
+      loadProjects()
+      loadProcesses()
+      // 重置展开状态
+      setExpandedProjects(new Set())
+      setProjectTrees({})
+      setExpandedDirs(new Set())
+    } else if (isSwitch && !sessionId) {
+      // 新对话：清空所有数据
+      setUploadFiles([])
+      setOutputFiles([])
+      setProjects([])
+      setProcesses([])
+      setExpandedProjects(new Set())
+      setProjectTrees({})
+      setExpandedDirs(new Set())
+    } else {
+      // 非切换（首次挂载等）
+      loadFiles(true)
+      loadProjects()
+      loadProcesses()
+    }
+  }, [loadFiles, loadProjects, loadProcesses, sessionId])
 
   // 自动刷新：AI 生成时每2秒刷新，平时每5秒刷新
   useEffect(() => {
@@ -72,10 +215,12 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
 
     const interval = setInterval(() => {
       loadFiles()
+      loadProjects()
+      loadProcesses()
     }, isStreaming ? 2000 : 5000)
 
     return () => clearInterval(interval)
-  }, [sessionId, isStreaming, loadFiles])
+  }, [sessionId, isStreaming, loadFiles, loadProjects, loadProcesses])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!sessionId || !e.target.files?.length) return
@@ -87,7 +232,7 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
       await loadFiles()
     } catch (error) {
       console.error('上传失败:', error)
-      alert('上传失败，请重试')
+      showToast('上传失败，请重试')
     } finally {
       setUploading(false)
       if (fileInputRef.current) {
@@ -122,7 +267,60 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
       URL.revokeObjectURL(objectUrl)
     } catch (error) {
       console.error('下载失败:', error)
-      alert('下载失败，请重试')
+      showToast('下载失败，请重试')
+    }
+  }
+
+  const handleDownloadByPath = async (path: string, filename: string) => {
+    if (!sessionId) return
+    try {
+      const url = workspaceApi.downloadByPathUrl(sessionId, path)
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      console.error('下载失败:', error)
+      showToast('下载失败，请重试')
+    }
+  }
+
+  const handlePreviewByPath = async (path: string, filename: string) => {
+    if (!sessionId) return
+    setPreviewFile({ name: filename, path, folder: '', size: 0, modified_at: 0 })
+    setPreviewContent(null)
+
+    const ext = filename.split('.').pop()?.toLowerCase()
+    const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')
+    const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css', 'html'].includes(ext || '')
+
+    try {
+      const url = workspaceApi.downloadByPathUrl(sessionId, path)
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+      if (isImage || ext === 'pdf') {
+        const blob = await response.blob()
+        setPreviewContent(URL.createObjectURL(blob))
+      } else if (isText) {
+        setPreviewContent(await response.text())
+      } else {
+        setPreviewContent(null)
+      }
+    } catch (error) {
+      console.error('获取文件内容失败:', error)
+      setPreviewContent('error')
     }
   }
 
@@ -183,7 +381,7 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
       await loadFiles()
     } catch (error) {
       console.error('删除失败:', error)
-      alert('删除失败，请重试')
+      showToast('删除失败，请重试')
     }
   }
 
@@ -207,6 +405,70 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
   const canPreview = (filename: string) => {
     const ext = filename.split('.').pop()?.toLowerCase()
     return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf', 'txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css', 'html'].includes(ext || '')
+  }
+
+  const renderTree = (entries: TreeEntry[], projectName: string) => {
+    return (
+      <div className="space-y-0.5">
+        {entries.map((entry) => {
+          const fullPath = entry.path
+          if (entry.type === 'dir') {
+            const isExpanded = expandedDirs.has(fullPath)
+            return (
+              <div key={fullPath}>
+                <div
+                  className="flex items-center gap-1.5 px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer transition-colors"
+                  onClick={() => toggleDir(fullPath)}
+                >
+                  {isExpanded
+                    ? <ChevronDown className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                    : <ChevronRight className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                  }
+                  <Folder className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
+                  <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{entry.name}/</span>
+                </div>
+                {isExpanded && entry.children && (
+                  <div className="pl-4">
+                    {renderTree(entry.children, projectName)}
+                  </div>
+                )}
+              </div>
+            )
+          }
+          // file
+          return (
+            <div key={fullPath} className="group flex items-center gap-1.5 px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+              <div className="w-3 h-3 flex-shrink-0" /> {/* indent spacer */}
+              <div className="text-gray-500 dark:text-gray-400 flex-shrink-0">{getFileIcon(entry.name)}</div>
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1" title={entry.name}>
+                {entry.name}
+              </span>
+              {entry.size !== undefined && (
+                <span className="text-xs text-gray-400 flex-shrink-0">{formatSize(entry.size)}</span>
+              )}
+              <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+                {canPreview(entry.name) && (
+                  <button
+                    onClick={() => handlePreviewByPath(fullPath, entry.name)}
+                    className="p-0.5 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded"
+                    title="预览"
+                  >
+                    <Eye className="w-3 h-3" />
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDownloadByPath(fullPath, entry.name)}
+                  className="p-0.5 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded"
+                  title="下载"
+                >
+                  <Download className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   const renderFileList = (files: WorkspaceFile[]) => {
@@ -291,68 +553,180 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
           )}
         </div>
 
-        {/* Upload Section */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">📤 上传区</h4>
-              {sessionId && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 transition-colors"
-                >
-                  <Upload className="w-3 h-3" />
-                  {uploading ? '上传中...' : '上传'}
-                </button>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={handleUpload}
-                className="hidden"
-                accept="image/*,.pdf,.csv,.txt,.md,.json,.py,.js,.ts"
-              />
-            </div>
-          </div>
-          <div className="px-2 py-2 max-h-64 overflow-y-auto">
-            {loading && uploadFiles.length === 0 ? (
-              <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
-                加载中...
+        {sessionId ? (
+          <>
+            {/* Upload Section */}
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">📤 上传区</h4>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 transition-colors"
+                  >
+                    <Upload className="w-3 h-3" />
+                    {uploading ? '上传中...' : '上传'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleUpload}
+                    className="hidden"
+                    accept="image/*,.pdf,.csv,.txt,.md,.json,.py,.js,.ts"
+                  />
+                </div>
               </div>
-            ) : (
-              renderFileList(uploadFiles)
-            )}
-          </div>
-        </div>
+              <div className="px-2 py-2 max-h-64 overflow-y-auto">
+                {loading && uploadFiles.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
+                    加载中...
+                  </div>
+                ) : (
+                  renderFileList(uploadFiles)
+                )}
+              </div>
+            </div>
 
-        {/* Output Section */}
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">📥 生成区</h4>
-              {sessionId && outputFiles.length > 0 && (
-                <button
-                  onClick={handleDownloadAll}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-                  title="下载全部"
-                >
-                  <Package className="w-3 h-3" />
-                  全部下载
-                </button>
-              )}
+            {/* Output Section */}
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">📥 生成区</h4>
+                  {outputFiles.length > 0 && (
+                    <button
+                      onClick={handleDownloadAll}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                      title="下载全部"
+                    >
+                      <Package className="w-3 h-3" />
+                      全部下载
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="px-2 py-2 max-h-64 overflow-y-auto">
+                {loading && outputFiles.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
+                    加载中...
+                  </div>
+                ) : (
+                  renderFileList(outputFiles)
+                )}
+              </div>
+            </div>
+
+            {/* Projects Section */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">📁 项目区</h4>
+              </div>
+              <div className="flex-1 px-2 py-2 overflow-y-auto">
+                {projects.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                    <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p className="text-xs">暂无项目</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {projects.map((proj) => (
+                      <div key={proj.name} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        {(() => {
+                          const proc = getProjectProcess(proj.name)
+                          const isStarting = startingProjects.has(proj.name)
+                          const isRunning = proc?.status === 'running'
+                          return (
+                            <div
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                              onClick={() => toggleProject(proj.name)}
+                            >
+                              {expandedProjects.has(proj.name)
+                                ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                : <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                              }
+                              <FolderOpen className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block">
+                                  {proj.name}
+                                </span>
+                                {isRunning && proc?.port ? (
+                                  <span className="text-xs text-green-600 dark:text-green-400">
+                                    :{proc.port} 运行中
+                                  </span>
+                                ) : null}
+                              </div>
+                              <span className="text-xs text-gray-400 flex-shrink-0">
+                                {proj.file_count} files
+                              </span>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                {isStarting ? (
+                                  <div className="p-1">
+                                    <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                                  </div>
+                                ) : isRunning ? (
+                                  <>
+                                    {onOpenPreview && proc?.port && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); onOpenPreview(`/api/preview/${proc.port}/`, proj.name) }}
+                                        className="p-1 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                        title="预览"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleRestartServer(proj) }}
+                                      className="p-1 text-orange-500 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-colors"
+                                      title="重启服务"
+                                    >
+                                      <RotateCw className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleStopServer(proj) }}
+                                      className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                                      title="停止服务"
+                                    >
+                                      <Square className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                ) : proj.file_count > 0 ? (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleStartServer(proj) }}
+                                    className="p-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors"
+                                    title="启动服务"
+                                  >
+                                    <Play className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        {expandedProjects.has(proj.name) && (
+                          <div className="border-t border-gray-200 dark:border-gray-700 pl-4 py-1">
+                            {(projectTrees[proj.name] || []).length > 0
+                              ? renderTree(projectTrees[proj.name], proj.name)
+                              : <p className="text-xs text-gray-500 dark:text-gray-400 py-2 px-2">(空项目)</p>
+                            }
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center text-gray-400 dark:text-gray-500">
+              <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p className="text-sm">选择或创建对话后</p>
+              <p className="text-sm">即可使用工作区</p>
             </div>
           </div>
-          <div className="flex-1 px-2 py-2 overflow-y-auto">
-            {loading && outputFiles.length === 0 ? (
-              <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
-                加载中...
-              </div>
-            ) : (
-              renderFileList(outputFiles)
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Preview Modal */}
@@ -431,7 +805,10 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
             {/* Footer */}
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
               <button
-                onClick={() => handleDownload(previewFile)}
+                onClick={() => previewFile.folder
+                  ? handleDownload(previewFile)
+                  : handleDownloadByPath(previewFile.path, previewFile.name)
+                }
                 className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 transition-colors"
               >
                 下载
@@ -444,6 +821,13 @@ export default function WorkspacePanel({ sessionId, isStreaming }: WorkspacePane
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 text-sm rounded-lg shadow-lg">
+          {toast}
         </div>
       )}
     </>
