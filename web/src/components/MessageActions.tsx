@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, RotateCw, Edit2, Trash2, Check } from 'lucide-react'
+import { Copy, RotateCw, Edit2, Trash2, Scissors, Check } from 'lucide-react'
 
 interface MessageActionsProps {
   role: 'user' | 'assistant'
@@ -9,6 +9,7 @@ interface MessageActionsProps {
   onRegenerate?: () => void
   onEdit?: () => void
   onDelete: () => void
+  onDeleteAfter?: () => void
 }
 
 export default function MessageActions({
@@ -18,7 +19,8 @@ export default function MessageActions({
   onCopy,
   onRegenerate,
   onEdit,
-  onDelete
+  onDelete,
+  onDeleteAfter,
 }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
 
@@ -60,6 +62,17 @@ export default function MessageActions({
           title="重新生成"
         >
           <RotateCw className="w-4 h-4" />
+        </button>
+      )}
+
+      {/* 从此处删除按钮 */}
+      {onDeleteAfter && (
+        <button
+          onClick={onDeleteAfter}
+          className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors"
+          title="从此处删除"
+        >
+          <Scissors className="w-4 h-4" />
         </button>
       )}
 

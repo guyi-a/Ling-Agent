@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
 
+    # Langfuse Observability (optional)
+    LANGFUSE_PUBLIC_KEY: Optional[str] = None
+    LANGFUSE_SECRET_KEY: Optional[str] = None
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+
     # JWT Configuration
     JWT_SECRET_KEY: str = "change-this-secret-key-in-production"
     JWT_ALGORITHM: str = "HS256"

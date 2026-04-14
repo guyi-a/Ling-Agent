@@ -335,6 +335,66 @@ class WriteFileTool(BaseTool):
         return self._run(path, content)
 
 
+class _EditFileInput(BaseModel):
+    path: str = Field(description="文件路径（相对于工作区的相对路径，如 outputs/index.html）")
+    old_string: str = Field(description="要被替换的原始文本（必须与文件中的内容精确匹配）")
+    new_string: str = Field(description="替换后的新文本")
+
+
+class EditFileTool(BaseTool):
+    """在工作区内对文件做局部替换（精确匹配 old_string → 替换为 new_string）"""
+    name: str = "edit_file"
+    description: str = (
+        "Edit a file by replacing a specific string with new content. "
+        "Much more efficient than rewriting the entire file — use this for small changes. "
+        "The old_string must match EXACTLY (including whitespace and indentation). "
+        "If old_string appears multiple times, only the FIRST occurrence is replaced. "
+        "Use relative paths like 'outputs/index.html'."
+    )
+    args_schema: Type[BaseModel] = _EditFileInput
+    current_session_id: Optional[str] = None
+
+    def _run(self, path: str, old_string: str, new_string: str) -> str:
+        try:
+            p = resolve_path(path, self.current_session_id)
+            if not p.exists():
+                return f"Error: File not found: {path}"
+            if not p.is_file():
+                return f"Error: Path is not a file: {path}"
+
+            content = p.read_text(encoding="utf-8")
+
+            if old_string not in content:
+                return (
+                    f"Error: old_string not found in {path}. "
+                    "Make sure it matches exactly (including whitespace and indentation)."
+                )
+
+            if old_string == new_string:
+                return "Error: old_string and new_string are identical, nothing to change."
+
+            new_content = content.replace(old_string, new_string, 1)
+            p.write_text(new_content, encoding="utf-8")
+
+            logger.info(
+                f"✏️  Edited file: {p} "
+                f"(replaced {len(old_string)} chars → {len(new_string)} chars)"
+            )
+            return (
+                f"Successfully edited {path}: "
+                f"replaced {len(old_string)} chars with {len(new_string)} chars."
+            )
+        except PermissionError as e:
+            return f"Error: {e}"
+        except UnicodeDecodeError:
+            return f"Error: Cannot edit binary file '{path}'."
+        except Exception as e:
+            return f"Error editing file '{path}': {e}"
+
+    async def _arun(self, path: str, old_string: str, new_string: str) -> str:
+        return self._run(path, old_string, new_string)
+
+
 class ListDirTool(BaseTool):
     """列出工作区目录内容"""
     name: str = "list_dir"

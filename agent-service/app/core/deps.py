@@ -2,7 +2,8 @@
 认证依赖注入 - 用于保护需要登录的接口
 """
 import logging
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,18 +16,12 @@ logger = logging.getLogger(__name__)
 
 # HTTP Bearer Token 方案
 bearer_scheme = HTTPBearer()
+bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    """
-    从 Authorization: Bearer <token> 中解析当前用户
-    用于需要登录的接口
-    """
-    token = credentials.credentials
-    payload = decode_token(token)
+async def _resolve_user(jwt_token: str, db: AsyncSession) -> User:
+    """从 JWT token 解析并返回用户对象"""
+    payload = decode_token(jwt_token)
 
     if not payload:
         raise HTTPException(
@@ -59,3 +54,39 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    从 Authorization: Bearer <token> 中解析当前用户
+    用于需要登录的接口
+    """
+    return await _resolve_user(credentials.credentials, db)
+
+
+async def get_current_user_flexible(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme_optional),
+    token: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    支持 Bearer header 或 ?token= 查询参数的认证。
+    用于浏览器直接访问的资源（如 <img src>）。
+    """
+    jwt_token = None
+    if credentials:
+        jwt_token = credentials.credentials
+    elif token:
+        jwt_token = token
+
+    if not jwt_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="缺少认证信息",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await _resolve_user(jwt_token, db)

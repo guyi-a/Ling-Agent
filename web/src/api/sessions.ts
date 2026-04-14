@@ -20,8 +20,8 @@ export const sessionsApi = {
     return data
   },
 
-  // 更新会话（重命名）
-  update: async (sessionId: string, updates: { title?: string; is_active?: boolean }) => {
+  // 更新会话
+  update: async (sessionId: string, updates: { title?: string; is_active?: boolean; is_pinned?: boolean }) => {
     const { data } = await apiClient.put<Session>(`/api/sessions/${sessionId}`, updates)
     return data
   },

@@ -4,7 +4,7 @@
 工作流程：
   1. stream_message 检测到 HumanInTheLoop interrupt → make_request_id()
   2. SSE yield approval_required 事件到前端
-  3. request_approval 挂起，等待 asyncio.Event
+  3. request_approval 挂起，等待 asyncio.Event（无超时）
   4. 用户点击允许/拒绝 → POST /api/chat/approve
   5. resolve_approval 设置 Event，stream_message 继续或中止
 
@@ -18,15 +18,12 @@ from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# 默认审批超时（秒）
-# 注意：前端倒计时显示 60s，后端设置 90s 留出网络延迟和时钟不同步的缓冲时间
-DEFAULT_TIMEOUT = 90
-
 # 高风险工具名单（需要人工审批，与 agent_factory.py 的 interrupt_on 保持同步）
 HIGH_RISK_TOOLS: set[str] = {
     "run_command",
     "python_repl",
     "write_file",
+    "edit_file",
     "dev_run",
 }
 
@@ -39,23 +36,20 @@ def make_request_id() -> str:
     return str(uuid.uuid4())
 
 
-async def request_approval(request_id: str, timeout: int = DEFAULT_TIMEOUT) -> bool:
+async def request_approval(request_id: str) -> bool:
     """
-    挂起当前协程，等待用户审批。
-    返回 True = 允许, False = 拒绝（含超时）
+    挂起当前协程，等待用户审批。无超时，永久等待直到用户操作。
+    返回 True = 允许, False = 拒绝
     """
     event = asyncio.Event()
     _pending_events[request_id] = event
     _pending_results[request_id] = None
 
-    logger.info(f"⏸  审批请求 {request_id[:8]}… 等待用户响应（超时 {timeout}s）")
+    logger.info(f"⏸  审批请求 {request_id[:8]}… 等待用户响应")
 
     try:
-        await asyncio.wait_for(event.wait(), timeout=timeout)
+        await event.wait()
         result = _pending_results.get(request_id, False)
-    except asyncio.TimeoutError:
-        logger.warning(f"⏱  审批超时 {request_id[:8]}…，自动拒绝")
-        result = False
     finally:
         _pending_events.pop(request_id, None)
         _pending_results.pop(request_id, None)

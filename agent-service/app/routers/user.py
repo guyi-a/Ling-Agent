@@ -12,6 +12,8 @@ from app.database.session import get_db
 from app.crud.user import user_crud
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserWithSessions
 from app.core.config import settings
+from app.core.deps import get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,14 @@ AVATAR_DIR = os.path.join(settings.WORKSPACE_ROOT, "avatars")
 os.makedirs(AVATAR_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user),
+):
+    """获取当前登录用户信息（通过 JWT token）"""
+    return current_user
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

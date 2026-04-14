@@ -25,6 +25,19 @@ async def _check_session_owner(session_id: str, current_user: User, db: AsyncSes
     return session
 
 
+@router.get("/search")
+async def search_messages_global(
+    keyword: str,
+    limit: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """跨会话全局搜索消息（需要登录）"""
+    if not keyword.strip():
+        return []
+    return await message_crud.search_global(db, current_user.user_id, keyword.strip(), limit)
+
+
 @router.get("/session/{session_id}", response_model=List[MessageResponse])
 async def get_session_messages(
     session_id: str,
@@ -58,14 +71,14 @@ async def get_conversation_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取前端展示用的对话历史（只含 user/assistant 可见消息）"""
+    """获取前端展示用的对话历史（含 user/assistant/tool 消息）"""
     await _check_session_owner(session_id, current_user, db)
-    # 直接从 DB 取原始消息，过滤掉 tool 消息和无文字内容的 assistant 消息
     raw = await message_crud.get_by_session(db, session_id, skip=0, limit=limit)
     messages = [
         {"role": m.role, "content": m.content, "message_id": m.message_id, "extra_data": m.extra_data}
         for m in raw
-        if m.role in ("user", "assistant") and (m.content or "").strip()
+        if (m.role in ("user", "assistant") and ((m.content or "").strip() or m.extra_data))
+        or (m.role == "tool" and (m.content or "").strip())
     ]
     return {"session_id": session_id, "messages": messages}
 

@@ -32,6 +32,11 @@ export const workspaceApi = {
     await apiClient.delete(`/api/workspace/${sessionId}/files/${folder}/${filename}`)
   },
 
+  // 按路径删除文件（支持嵌套目录）
+  deleteByPath: async (sessionId: string, path: string) => {
+    await apiClient.delete(`/api/workspace/${sessionId}/delete`, { params: { path } })
+  },
+
   // 按路径下载文件（支持嵌套目录）
   downloadByPathUrl: (sessionId: string, path: string) => {
     return `/api/workspace/${sessionId}/download?path=${encodeURIComponent(path)}`

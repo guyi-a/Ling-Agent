@@ -69,10 +69,24 @@ class SessionCRUD:
         if is_active is not None:
             query = query.where(Session.is_active == is_active)
         
-        query = query.offset(skip).limit(limit).order_by(Session.updated_at.desc())
-        
+        query = query.offset(skip).limit(limit).order_by(Session.is_pinned.desc(), Session.updated_at.desc())
+
         result = await db.execute(query)
-        return result.scalars().all()
+        sessions = list(result.scalars().all())
+
+        # 批量查消息数
+        if sessions:
+            from app.models.message import Message
+            counts = await db.execute(
+                select(Message.session_id, func.count(Message.id))
+                .where(Message.session_id.in_([s.session_id for s in sessions]))
+                .group_by(Message.session_id)
+            )
+            count_map = dict(counts.all())
+            for s in sessions:
+                s.message_count = count_map.get(s.session_id, 0)
+
+        return sessions
 
     async def get_latest_by_user(
         self, 

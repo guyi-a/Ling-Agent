@@ -38,6 +38,7 @@ Workspace: {session_id}/
 Available file tools:
 - `read_file(path)` — Read a file from the workspace. Use relative paths like `uploads/data.csv`
 - `write_file(path, content)` — Write or create a file. Always save generated files to `outputs/`
+- `edit_file(path, old_string, new_string)` — Edit a file by replacing old_string with new_string. **Prefer this over write_file for small changes** — it saves tokens and is less error-prone
 - `list_dir(path)` — List workspace contents. Default shows session root
 
 Path rules:

@@ -42,6 +42,25 @@
     word-wrap: break-word;
     word-break: break-word;
   }
+
+  /* SyntaxHighlighter (Prism) 内部强制换行 */
+  pre[class*="language-"] {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    word-break: break-all !important;
+    overflow-x: hidden !important;
+  }
+  pre[class*="language-"] code {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    word-break: break-all !important;
+  }
+  pre[class*="language-"] code > span {
+    display: inline !important;
+  }
+  pre[class*="language-"] code > span > span {
+    display: inline !important;
+  }
 }
 
 @layer components {

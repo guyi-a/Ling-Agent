@@ -1,7 +1,13 @@
 import apiClient from './client'
-import type { DevProcess } from '@/types'
+import type { DevProcess, DevApp } from '@/types'
 
 export const devApi = {
+  /** 列出当前用户所有会话的后台进程 */
+  listAllProcesses: async (): Promise<DevApp[]> => {
+    const { data } = await apiClient.get<{ processes: DevApp[] }>('/api/dev/all')
+    return data.processes
+  },
+
   /** 列出 session 的所有后台进程 */
   listProcesses: async (sessionId: string): Promise<DevProcess[]> => {
     const { data } = await apiClient.get<{ session_id: string; processes: DevProcess[] }>(

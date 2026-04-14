@@ -18,6 +18,7 @@ class Session(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    is_pinned = Column(Boolean, default=False)
     
     # 关系
     user = relationship("User", back_populates="sessions")

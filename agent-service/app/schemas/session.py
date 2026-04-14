@@ -19,6 +19,7 @@ class SessionUpdate(BaseModel):
     """更新会话请求"""
     title: Optional[str] = Field(None, description="会话标题")
     is_active: Optional[bool] = Field(None, description="是否激活")
+    is_pinned: Optional[bool] = Field(None, description="是否置顶")
 
 
 class SessionResponse(BaseModel):
@@ -30,6 +31,7 @@ class SessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_active: bool
+    is_pinned: Optional[bool] = Field(False, description="是否置顶")
     message_count: Optional[int] = Field(None, description="消息数量")
 
     class Config:

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.session import get_db
 from app.crud.session import session_crud
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_flexible
 from app.core.config import settings
 from app.models.user import User
 
@@ -97,16 +97,25 @@ async def list_files(
         d = workspace / f
         if not d.is_dir():
             continue
-        for item in sorted(d.iterdir()):
-            if item.is_file():
-                stat = item.stat()
-                result.append({
-                    "name": item.name,
-                    "path": f"{f}/{item.name}",
-                    "folder": f,
-                    "size": stat.st_size,
-                    "modified_at": stat.st_mtime,
-                })
+        for item in sorted(d.rglob("*")):
+            if not item.is_file():
+                continue
+            # outputs/projects/ 下的文件由项目区展示，跳过
+            if f == "outputs":
+                try:
+                    item.relative_to(workspace / "outputs" / "projects")
+                    continue
+                except ValueError:
+                    pass
+            stat = item.stat()
+            rel = item.relative_to(workspace)
+            result.append({
+                "name": item.name,
+                "path": str(rel),
+                "folder": f,
+                "size": stat.st_size,
+                "modified_at": stat.st_mtime,
+            })
 
     return {"session_id": session_id, "files": result}
 
@@ -194,7 +203,7 @@ async def get_tree(
 async def download_by_path(
     session_id: str,
     path: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: AsyncSession = Depends(get_db),
 ):
     """通过相对路径下载工作区文件（支持嵌套目录）"""
@@ -222,7 +231,7 @@ async def download_file(
     session_id: str,
     folder: str,
     filename: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: AsyncSession = Depends(get_db),
 ):
     """下载工作区文件（folder: uploads | outputs）"""
@@ -267,3 +276,25 @@ async def delete_file(
 
     file_path.unlink()
     return {"status": "success", "message": f"{folder}/{filename} 已删除"}
+
+
+@router.delete("/{session_id}/delete")
+async def delete_by_path(
+    session_id: str,
+    path: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """通过相对路径删除工作区文件（支持嵌套目录）"""
+    await _check_session_owner(session_id, current_user, db)
+
+    workspace = _get_session_workspace(session_id).resolve()
+    file_path = (workspace / path).resolve()
+
+    if not file_path.is_relative_to(workspace):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径越界")
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+
+    file_path.unlink()
+    return {"status": "success", "message": f"{path} 已删除"}

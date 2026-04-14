@@ -170,6 +170,35 @@ class MessageCRUD:
         result = _drop_orphan_tool_calls(result)
         return result
 
+    async def update_extra_data(
+        self,
+        db: AsyncSession,
+        session_id: str,
+        updates: dict,
+    ) -> bool:
+        """更新该会话最近一条 assistant 消息的 extra_data（合并式更新）。
+
+        用于持久化审批状态等运行时信息。值为 None 的 key 会被删除。
+        """
+        result = await db.execute(
+            select(Message)
+            .where(Message.session_id == session_id, Message.role == "assistant")
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )
+        msg = result.scalar_one_or_none()
+        if not msg:
+            return False
+        existing = json.loads(msg.extra_data) if msg.extra_data else {}
+        for k, v in updates.items():
+            if v is None:
+                existing.pop(k, None)
+            else:
+                existing[k] = v
+        msg.extra_data = json.dumps(existing, ensure_ascii=False)
+        await db.commit()
+        return True
+
     async def delete(self, db: AsyncSession, message_id: str) -> bool:
         """删除消息"""
         result = await db.execute(
@@ -211,6 +240,41 @@ class MessageCRUD:
             .limit(limit)
         )
         return result.scalars().all()
+
+    async def search_global(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        keyword: str,
+        limit: int = 30
+    ) -> List[dict]:
+        """跨会话全局搜索消息，返回消息 + 会话标题"""
+        from app.models.session import Session
+
+        result = await db.execute(
+            select(Message, Session.title)
+            .join(Session, Message.session_id == Session.session_id)
+            .where(
+                Session.user_id == user_id,
+                Session.is_active == True,
+                Message.role.in_(["user", "assistant"]),
+                Message.content.contains(keyword),
+            )
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+        )
+        rows = result.all()
+        return [
+            {
+                "message_id": msg.message_id,
+                "session_id": msg.session_id,
+                "role": msg.role,
+                "content": msg.content[:200] if msg.content else "",
+                "created_at": msg.created_at.isoformat(),
+                "session_title": title or "未命名对话",
+            }
+            for msg, title in rows
+        ]
 
     async def delete_after_timestamp(
         self,

@@ -3,41 +3,36 @@
 """
 import json
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from typing import Optional, AsyncIterator, List, Dict, Any
-from datetime import datetime
 import logging
 
 from app.core.approval import resolve_approval
 
-from app.database.session import get_db
+from app.database.session import get_db, AsyncSessionLocal
 from app.crud.session import session_crud
 from app.crud.message import message_crud
 from app.crud.user import user_crud
 from app.schemas.message import MessageCreate
 from app.agent.service.agent_service import get_agent_service
+from app.agent.service.event_buffer import stream_buffers
 from app.core.deps import get_current_user
 from app.models.user import User
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
 
+SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+}
+
 
 def _validate_attachments(attachments: List[Dict[str, Any]]) -> bool:
-    """
-    验证附件列表的安全性
-
-    检查：
-    1. 路径不能包含 ..（防止目录遍历）
-    2. 路径必须在 uploads/ 或 outputs/ 下
-    3. 类型必须是 image 或 file
-
-    Returns:
-        True if valid, raises HTTPException otherwise
-    """
+    """验证附件列表的安全性"""
     if not attachments:
         return True
 
@@ -45,21 +40,16 @@ def _validate_attachments(attachments: List[Dict[str, Any]]) -> bool:
         att_type = att.get("type")
         att_path = att.get("path", "")
 
-        # 验证类型
         if att_type not in ["image", "file"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid attachment type: {att_type}"
             )
-
-        # 验证路径（防止目录遍历）
         if ".." in att_path or att_path.startswith("/"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid attachment path: path traversal detected"
             )
-
-        # 路径必须在允许的目录下
         allowed_prefixes = ["uploads/", "outputs/"]
         if not any(att_path.startswith(prefix) for prefix in allowed_prefixes):
             raise HTTPException(
@@ -90,7 +80,6 @@ class ChatResponse(BaseModel):
 
 async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSession):
     """公共逻辑：获取或创建会话，保存用户消息，返回 (session, user_message, history, is_new)"""
-    # 验证附件安全性
     _validate_attachments(request.attachments)
 
     is_new_session = False
@@ -102,9 +91,14 @@ async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSe
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
         if session.user_id != current_user.user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
+        # 会话标题为空时（如粘贴图片自动创建的），用第一条消息补标题
+        if not session.title:
+            title = request.message[:30] + "..." if len(request.message) > 30 else request.message
+            from app.schemas.session import SessionUpdate
+            await session_crud.update(db, session.session_id, SessionUpdate(title=title))
+            session.title = title
     else:
         from app.schemas.session import SessionCreate
-        # 使用用户消息的前30个字符作为会话标题
         title = request.message[:30] + "..." if len(request.message) > 30 else request.message
         session = await session_crud.create(
             db,
@@ -113,7 +107,6 @@ async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSe
         )
         is_new_session = True
 
-    # 构建 extra_data（包含附件信息）
     extra_data = {}
     if request.attachments:
         extra_data["attachments"] = request.attachments
@@ -171,71 +164,159 @@ async def chat(
     )
 
 
+# ---------------------------------------------------------------------------
+# SSE helpers
+# ---------------------------------------------------------------------------
+
+def _sse(event: str, data: dict) -> str:
+    """格式化 SSE 事件为已编码的字符串"""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _map_chunk_to_sse(chunk: dict) -> str:
+    """将 agent_service.stream_message() 的 chunk 映射并编码为 SSE 字符串"""
+    chunk_type = chunk.get("type")
+    if chunk_type == "token":
+        return _sse("token", {"text": chunk["text"]})
+    elif chunk_type == "model_start":
+        return _sse("model_start", {})
+    elif chunk_type == "tool_start":
+        return _sse("tool_start", {"tool_name": chunk["tool_name"], "tool_input": chunk.get("tool_input", {})})
+    elif chunk_type == "tool_end":
+        return _sse("tool_end", {"tool_name": chunk["tool_name"], "tool_output": chunk.get("tool_output", "")})
+    elif chunk_type == "approval_required":
+        return _sse("approval_required", {
+            "request_id": chunk["request_id"],
+            "tool_name": chunk["tool_name"],
+            "tool_input": chunk.get("tool_input", {}),
+        })
+    elif chunk_type == "approval_rejected":
+        return _sse("approval_rejected", {"tool_name": chunk["tool_name"]})
+    elif chunk_type == "cancelled":
+        return _sse("cancelled", {"text": chunk.get("text", "")})
+    elif chunk_type == "done":
+        return _sse("done", {"assistant_message_id": chunk.get("assistant_message_id")})
+    else:
+        return _sse(chunk_type or "unknown", chunk)
+
+
+# ---------------------------------------------------------------------------
+# SSE streaming endpoints
+# ---------------------------------------------------------------------------
+
 @router.post("/stream")
 async def chat_stream(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """SSE 流式聊天接口"""
+    """SSE 流式聊天接口。Agent 在后台 task 中执行，事件写入 StreamBuffer。"""
     session, user_message, history, is_new_session = await _prepare_session(request, current_user, db)
 
+    # 如果同一 session 已有活跃流，直接返回 stream_all
+    if stream_buffers.is_streaming(session.session_id):
+        buffer = stream_buffers.get(session.session_id)
+        return StreamingResponse(
+            buffer.stream_all(),
+            media_type="text/event-stream",
+            headers=SSE_HEADERS,
+        )
+
     agent_service = get_agent_service()
+    buffer = stream_buffers.create(session.session_id)
 
-    def sse(event: str, data: dict) -> str:
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    # 推送 session 元信息作为第一个 chunk
+    buffer.append(_sse("session", {
+        "session_id": session.session_id,
+        "user_message_id": user_message.message_id,
+        "is_new_session": is_new_session,
+    }))
 
-    async def generate() -> AsyncIterator[str]:
-        # 先推送会话元信息
-        yield sse("session", {
-            "session_id": session.session_id,
-            "user_message_id": user_message.message_id,
-            "is_new_session": is_new_session
-        })
+    if not agent_service.is_ready():
+        buffer.append(_sse("token", {"text": "抱歉，AI 助手暂时不可用，请稍后重试。"}))
+        buffer.append(_sse("done", {}))
+        buffer.finish()
+    else:
+        # 后台任务运行 Agent，事件写入 buffer
+        async def run_agent():
+            async with AsyncSessionLocal() as agent_db:
+                try:
+                    async for chunk in agent_service.stream_message(
+                        db=agent_db,
+                        session_id=session.session_id,
+                        user_message=request.message,
+                        history=history,
+                        attachments=request.attachments
+                    ):
+                        # 内部标记：DB 保存点，不发给前端
+                        if chunk.get("type") == "_save_point":
+                            buffer.mark_save_point()
+                            continue
+                        # 追踪间隙文本（token 类型）
+                        if chunk.get("type") == "token":
+                            buffer.append_gap_text(chunk["text"])
+                        buffer.append(_map_chunk_to_sse(chunk))
+                except asyncio.CancelledError:
+                    try:
+                        buffer.append(_sse("cancelled", {"text": "生成已被停止"}))
+                    except Exception:
+                        pass
+                except Exception as e:
+                    logger.error(f"Background agent error: {e}", exc_info=True)
+                    buffer.append(_sse("error", {"message": str(e)}))
+                finally:
+                    buffer.finish()
+                    stream_buffers.remove(session.session_id)
 
-        if not agent_service.is_ready():
-            yield sse("token", {"text": "抱歉，AI 助手暂时不可用，请稍后重试。"})
-            yield sse("done", {})
-            return
-
-        try:
-            async for chunk in agent_service.stream_message(
-                db=db,
-                session_id=session.session_id,
-                user_message=request.message,
-                history=history,
-                attachments=request.attachments
-            ):
-                chunk_type = chunk.get("type")
-                if chunk_type == "token":
-                    yield sse("token", {"text": chunk["text"]})
-                elif chunk_type == "model_start":
-                    yield sse("model_start", {})
-                elif chunk_type == "tool_start":
-                    yield sse("tool_start", {"tool_name": chunk["tool_name"], "tool_input": chunk.get("tool_input", {})})
-                elif chunk_type == "tool_end":
-                    yield sse("tool_end", {"tool_name": chunk["tool_name"], "tool_output": chunk.get("tool_output", "")})
-                elif chunk_type == "approval_required":
-                    yield sse("approval_required", {
-                        "request_id": chunk["request_id"],
-                        "tool_name": chunk["tool_name"],
-                        "tool_input": chunk.get("tool_input", {}),
-                    })
-                elif chunk_type == "approval_rejected":
-                    yield sse("approval_rejected", {"tool_name": chunk["tool_name"]})
-                elif chunk_type == "done":
-                    yield sse("done", {"assistant_message_id": chunk.get("assistant_message_id")})
-        except Exception as e:
-            logger.error(f"SSE stream error: {e}", exc_info=True)
-            yield sse("error", {"message": str(e)})
+        task = asyncio.create_task(run_agent())
+        buffer.set_task(task)
 
     return StreamingResponse(
-        generate(),
+        buffer.stream_all(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        }
+        headers=SSE_HEADERS,
+    )
+
+
+@router.get("/{session_id}/resume")
+async def resume_stream(
+    session_id: str,
+    subscribe_only: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """重连端点。subscribe_only=true 只订阅新事件（配合 DB 历史使用），否则回放完整流。无活跃流返回 204。"""
+    session = await session_crud.get_by_id(db, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+    if session.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
+
+    if not stream_buffers.is_streaming(session_id):
+        return Response(status_code=204)
+
+    buffer = stream_buffers.get(session_id)
+    if subscribe_only:
+        # subscribe 模式：注入间隙文本 + 待审批事件，然后订阅新事件
+        async def _subscribe_with_catchup():
+            # 1. 注入 DB 保存点后的间隙文本（避免刷新后文字变少）
+            gap = buffer._gap_text
+            if gap:
+                yield _sse("token", {"text": gap})
+            # 2. 注入待审批事件（如果有）
+            pending = buffer._pending_approval_chunk
+            if pending:
+                yield pending
+            # 3. 订阅后续新事件
+            async for chunk in buffer.subscribe():
+                yield chunk
+        stream = _subscribe_with_catchup()
+    else:
+        stream = buffer.stream_all()
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers=SSE_HEADERS,
     )
 
 
@@ -295,18 +376,21 @@ async def stop_generation(
     db: AsyncSession = Depends(get_db)
 ):
     """停止指定会话的 Agent 生成（需要登录）"""
-    # 验证会话权限
     session = await session_crud.get_by_id(db, session_id)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
     if session.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
 
-    # 尝试取消 Agent 执行
+    # 优先用 buffer.cancel() 取消后台任务
+    buffer = stream_buffers.get(session_id)
+    if buffer and buffer.cancel():
+        return {"status": "ok", "message": "生成已停止"}
+
+    # 兜底：通过 agent_service 取消
     agent_service = get_agent_service()
     cancelled = agent_service.cancel_session(session_id)
-
     if cancelled:
         return {"status": "ok", "message": "生成已停止"}
-    else:
-        return {"status": "not_running", "message": "该会话当前没有正在执行的任务"}
+
+    return {"status": "not_running", "message": "该会话当前没有正在执行的任务"}

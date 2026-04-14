@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
-import { AlertTriangle, Check, X, Clock } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { AlertTriangle, Check, X } from 'lucide-react'
 import { chatApi } from '@/api/chat'
 
 interface ApprovalCardProps {
   requestId: string
   toolName: string
   toolInput: any
-  initialRemaining: number
   onComplete: () => void
 }
 
@@ -14,32 +13,27 @@ export default function ApprovalCard({
   requestId,
   toolName,
   toolInput,
-  initialRemaining,
   onComplete,
 }: ApprovalCardProps) {
-  const [remaining, setRemaining] = useState(initialRemaining)
-  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected' | 'timeout'>('pending')
+  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected' | 'expired'>('pending')
 
   const handleDecision = useCallback(async (approved: boolean) => {
     if (status !== 'pending') return
-
-    console.log(`审批决定: ${approved ? '同意' : '拒绝'}, requestId: ${requestId}`)
 
     // 先更新状态，防止重复点击
     setStatus(approved ? 'approved' : 'rejected')
 
     try {
       await chatApi.approve(requestId, approved)
-      console.log('审批请求成功')
 
-      // 短暂延迟后通知完成
       setTimeout(() => {
         onComplete()
       }, 800)
     } catch (error: any) {
       console.error('审批请求失败:', error)
       if (error.response?.status === 404) {
-        setStatus('timeout')
+        // request_id 不存在（服务重启 / 已过期）
+        setStatus('expired')
       } else {
         setStatus('rejected')
       }
@@ -50,33 +44,12 @@ export default function ApprovalCard({
     }
   }, [status, requestId, onComplete])
 
-  useEffect(() => {
-    if (status !== 'pending') return
-
-    const timer = setInterval(() => {
-      setRemaining((prev) => {
-        if (prev <= 1) {
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [status])
-
-  // 当倒计时到0时，自动拒绝
-  useEffect(() => {
-    if (status === 'pending' && remaining === 0) {
-      handleDecision(false)
-    }
-  }, [remaining, status, handleDecision])
-
   const getToolLabel = (name: string) => {
     const map: Record<string, string> = {
       list_dir: '查看工作区',
       read_file: '读取文件',
       write_file: '写入文件',
+      edit_file: '编辑文件',
       web_search: '网络搜索',
       search_web: '网络搜索',
       fetch_url: '访问网页',
@@ -98,14 +71,23 @@ export default function ApprovalCard({
     )
   }
 
-  if (status === 'rejected' || status === 'timeout') {
+  if (status === 'rejected') {
     return (
       <div className="my-3 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
         <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
           <X className="w-4 h-4" />
-          <span className="text-sm font-medium">
-            {status === 'timeout' ? '审批已超时' : '已拒绝'}
-          </span>
+          <span className="text-sm font-medium">已拒绝</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'expired') {
+    return (
+      <div className="my-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+          <X className="w-4 h-4" />
+          <span className="text-sm font-medium">审批已失效（服务已重启或会话已结束）</span>
         </div>
       </div>
     )
@@ -114,15 +96,9 @@ export default function ApprovalCard({
   return (
     <div className="my-3 px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-          <span className="text-sm font-medium text-orange-900 dark:text-orange-100">需要授权</span>
-        </div>
-        <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-          <Clock className="w-3 h-3" />
-          <span className="text-xs font-mono">{remaining}s</span>
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+        <span className="text-sm font-medium text-orange-900 dark:text-orange-100">需要授权</span>
       </div>
 
       {/* Tool Info */}

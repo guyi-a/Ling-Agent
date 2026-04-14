@@ -46,9 +46,8 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
   const filesEqual = (a: WorkspaceFile[], b: WorkspaceFile[]) => {
     if (a.length !== b.length) return false
     return a.every((file, idx) =>
-      file.name === b[idx]?.name &&
-      file.size === b[idx]?.size &&
-      file.folder === b[idx]?.folder
+      file.path === b[idx]?.path &&
+      file.size === b[idx]?.size
     )
   }
 
@@ -245,7 +244,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
     if (!sessionId) return
 
     try {
-      const url = workspaceApi.downloadUrl(sessionId, file.folder, file.name)
+      const url = workspaceApi.downloadByPathUrl(sessionId, file.path)
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -344,7 +343,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
     const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css', 'html'].includes(ext || '')
 
     try {
-      const url = workspaceApi.downloadUrl(sessionId, file.folder, file.name)
+      const url = workspaceApi.downloadByPathUrl(sessionId, file.path)
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -377,7 +376,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
     if (!sessionId || !confirm(`确定删除文件 ${file.name}？`)) return
 
     try {
-      await workspaceApi.deleteFile(sessionId, file.folder, file.name)
+      await workspaceApi.deleteByPath(sessionId, file.path)
       await loadFiles()
     } catch (error) {
       console.error('删除失败:', error)

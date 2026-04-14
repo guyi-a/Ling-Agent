@@ -396,6 +396,42 @@ def stop_all(session_id: str) -> None:
     logger.info(f"■ All processes stopped for session {session_id[:8]}")
 
 
+def list_all_processes() -> list[dict]:
+    """列出所有 session 的所有进程（带 session_id）"""
+    _init_ports()
+    workspace_root = Path(settings.WORKSPACE_ROOT)
+    if not workspace_root.exists():
+        return []
+
+    results = []
+    for session_dir in sorted(workspace_root.iterdir()):
+        if not session_dir.is_dir():
+            continue
+        proc_root = session_dir / ".proc"
+        if not proc_root.exists():
+            continue
+        session_id = session_dir.name
+        for name_dir in sorted(proc_root.iterdir()):
+            if not name_dir.is_dir():
+                continue
+            meta = _read_meta(name_dir)
+            if not meta:
+                continue
+            pid = _read_pid(name_dir)
+            alive = _is_process_alive(pid)
+            results.append({
+                "session_id": session_id,
+                "name": name_dir.name,
+                "command": meta["command"],
+                "workdir": meta["workdir"],
+                "port": meta.get("port"),
+                "pid": pid,
+                "status": "running" if alive else "exited",
+                "exit_code": None,
+            })
+    return results
+
+
 def is_port_active(port: int) -> bool:
     """检查端口是否有正在运行的受管进程"""
     _init_ports()

@@ -32,7 +32,8 @@ def get_llm() -> Optional[ChatOpenAI]:
             max_retries=2,
             base_url=settings.LLM_BASE_URL,
             api_key=settings.DASHSCOPE_API_KEY,
-            model=settings.LLM_MODEL
+            model=settings.LLM_MODEL,
+            stream_usage=True,  # 流式模式下也返回 token 用量（Langfuse 需要）
         )
         logger.info(f"✓ LLM实例已创建 - model: {settings.LLM_MODEL}")
         return llm

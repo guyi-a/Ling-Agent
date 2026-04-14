@@ -14,7 +14,7 @@ from typing import List
 
 from langchain.tools import BaseTool
 
-from app.agent.tools.file_tool import ReadFileTool, WriteFileTool, ListDirTool
+from app.agent.tools.file_tool import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from app.agent.tools.web_tool import WebFetchTool, WebSearchTool
 from app.agent.tools.skill_tool import create_skill_tool
 from app.agent.tools.shell_tool import ShellTool
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # 文件工具单例（需要注入 session_id）
 _read_file_tool = ReadFileTool()
 _write_file_tool = WriteFileTool()
+_edit_file_tool = EditFileTool()
 _list_dir_tool = ListDirTool()
 _shell_tool = ShellTool()
 _python_repl_tool = PythonReplTool()
@@ -43,6 +44,7 @@ def set_session_id(session_id: str) -> None:
     """在每次对话前注入 session_id 到文件工具"""
     _read_file_tool.current_session_id = session_id
     _write_file_tool.current_session_id = session_id
+    _edit_file_tool.current_session_id = session_id
     _list_dir_tool.current_session_id = session_id
     _shell_tool.current_session_id = session_id
     _python_repl_tool.current_session_id = session_id
@@ -68,6 +70,7 @@ def get_all_tools() -> List[BaseTool]:
     tools: List[BaseTool] = [
         _read_file_tool,
         _write_file_tool,
+        _edit_file_tool,
         _list_dir_tool,
         _shell_tool,
         _python_repl_tool,

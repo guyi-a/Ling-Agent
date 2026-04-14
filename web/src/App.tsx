@@ -9,6 +9,7 @@ import ChatPage from '@/pages/chat/ChatPage'
 import SessionsPage from '@/pages/sessions/SessionsPage'
 import ProfilePage from '@/pages/profile/ProfilePage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import AppsPage from '@/pages/apps/AppsPage'
 
 const queryClient = new QueryClient()
 
@@ -81,6 +82,14 @@ function App() {
             element={
               <PrivateRoute>
                 <SettingsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/apps"
+            element={
+              <PrivateRoute>
+                <AppsPage />
               </PrivateRoute>
             }
           />

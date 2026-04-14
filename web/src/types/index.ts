@@ -12,6 +12,8 @@ export interface Session {
   title: string
   created_at: string
   updated_at: string
+  message_count?: number
+  is_pinned?: boolean
 }
 
 // 消息相关
@@ -66,6 +68,12 @@ export interface DevProcess {
   pid: number | null
   status: 'starting' | 'running' | 'exited'
   exit_code: number | null
+}
+
+// 全局应用（带 session 信息的进程）
+export interface DevApp extends DevProcess {
+  session_id: string
+  session_title: string
 }
 
 // 工作区文件

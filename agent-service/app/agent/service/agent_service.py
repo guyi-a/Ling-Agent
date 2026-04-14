@@ -18,6 +18,7 @@ from app.agent.tools.registry import get_all_tools, set_session_id
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
 from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,32 @@ class AgentService:
         self._prompt_template = self._load_system_prompt_template()
         self.agent = None
         self._active_tasks: Dict[str, asyncio.Task] = {}  # 记录活跃的流式任务 {session_id: task}
+        self._langfuse_handler = self._init_langfuse()
         self._initialize_agent()
     
+    def _init_langfuse(self):
+        """初始化 Langfuse CallbackHandler（如果配置了 key）"""
+        if not settings.LANGFUSE_PUBLIC_KEY or not settings.LANGFUSE_SECRET_KEY:
+            return None
+        try:
+            from langfuse import Langfuse
+            from langfuse.langchain import CallbackHandler
+            # 初始化 Langfuse 单例（v4 要求）
+            Langfuse(
+                public_key=settings.LANGFUSE_PUBLIC_KEY,
+                secret_key=settings.LANGFUSE_SECRET_KEY,
+                host=settings.LANGFUSE_HOST,
+            )
+            handler = CallbackHandler()
+            logger.info("✅ Langfuse 可观测性已启用")
+            return handler
+        except ImportError:
+            logger.warning("⚠️ langfuse 未安装，跳过可观测性集成（pip install langfuse）")
+            return None
+        except Exception as e:
+            logger.warning(f"⚠️ Langfuse 初始化失败: {e}")
+            return None
+
     def _initialize_agent(self):
         """初始化 Agent 实例"""
         try:
@@ -451,6 +476,13 @@ Always be concise and direct in your responses."""
             "recursion_limit": 50
         }
 
+        # Langfuse 可观测性：注入 callback
+        if self._langfuse_handler:
+            config["callbacks"] = [self._langfuse_handler]
+            config["metadata"] = {
+                "langfuse_session_id": session_id,
+            }
+
         full_response = ""
         current_round_text = ""
         tc_chunks: Dict[int, Dict] = {}
@@ -519,6 +551,7 @@ Always be concise and direct in your responses."""
                                     args = {}
                                 tc_list.append({"name": tc["name"], "args": args, "id": tc["id"]})
                             await self._save_ai_tool_call_message(db, session_id, current_round_text, tc_list)
+                            yield {"type": "_save_point"}
                             pending_tool_call_ids = [tc["id"] for tc in tc_list]
                             pending_tc_list = tc_list
                             executed_ids = []
@@ -575,7 +608,28 @@ Always be concise and direct in your responses."""
                     "pending_count": num_pending,
                 }
 
+                # 持久化审批状态到 DB（刷新后可恢复审批卡片）
+                try:
+                    await message_crud.update_extra_data(db, session_id, {
+                        "pending_approval": {
+                            "request_id": request_id,
+                            "tool_name": tool_name,
+                            "tool_input": tool_input,
+                        }
+                    })
+                except Exception as e:
+                    logger.warning(f"持久化审批状态失败: {e}")
+
                 approved = await request_approval(request_id)
+
+                # 清除 pending，记录审批结果
+                try:
+                    await message_crud.update_extra_data(db, session_id, {
+                        "pending_approval": None,
+                        "approval_result": "approved" if approved else "rejected",
+                    })
+                except Exception as e:
+                    logger.warning(f"清除审批状态失败: {e}")
 
                 if not approved:
                     yield {"type": "approval_rejected", "tool_name": tool_name}

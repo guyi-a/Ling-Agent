@@ -24,7 +24,7 @@ export default function Avatar({ size = 32, rounded = 'rounded-xl', className = 
   const gradient = AVATAR_PALETTES.find((p) => p.id === activePaletteId)?.gradient ?? AVATAR_PALETTES[0].gradient
   const initials = getInitials(username)
 
-  const avatarUrl = userId ? `/api/users/${userId}/avatar?t=${avatarTs}` : null
+  const avatarUrl = userId && avatarTs > 0 ? `/api/users/${userId}/avatar?t=${avatarTs}` : null
   const showImage = !!avatarUrl && !imgError
 
   const style = { width: size, height: size, flexShrink: 0 }

@@ -52,7 +52,8 @@ outputs/projects/{app-name}/
 
 | Action | Tool | Notes |
 |--------|------|-------|
-| Create/edit files | `write_file` | Path: `outputs/projects/{name}/filename` |
+| Create new files | `write_file` | Path: `outputs/projects/{name}/filename` |
+| Edit existing files | `edit_file` | **Prefer over write_file for small changes** — saves tokens |
 | Read files | `read_file` | Check existing content before editing |
 | List directory | `list_dir` | Verify project structure |
 | Run shell commands | `run_command` | Create venv, install deps. Max 120s. |
@@ -66,15 +67,16 @@ outputs/projects/{app-name}/
 
 1. **Write PLAN.md FIRST** — create `outputs/projects/{app-name}/PLAN.md` containing:
    - Data model (tables, fields)
-   - API endpoints list (method, path, request/response)
+   - API endpoints list (method, path, request/response format)
    - Frontend pages and components
    - Frontend-to-API mapping (which page calls which endpoint)
    This ensures frontend and backend paths stay in sync. **Do NOT write any code before PLAN.md is done.**
 2. **Build backend** — write `main.py` + `routes.py` + `requirements.txt` → create venv if needed → install deps → `dev_run` → verify with `dev_logs`. **Do NOT write any frontend files before backend is created and working.**
-3. **Build frontend** — write `index.html` (+ CSS/JS). Follow PLAN.md to ensure `fetch()` calls match API routes exactly.
-4. **Start preview** — tell the user: "点击项目卡片上的预览按钮（眼睛图标）查看效果"
-5. **Show the user** — pause and wait for feedback. Do not continue until the user responds.
-6. **Iterate** — apply feedback → edit files → `dev_restart` → tell user to refresh preview.
+3. **Curl-test ALL API endpoints** — this step is **MANDATORY**, do NOT skip it. After the server starts successfully, use `run_command` to curl every endpoint in PLAN.md. See the "API Self-Testing" section below for details.
+4. **Build frontend** — write `index.html` (+ CSS/JS). Follow PLAN.md to ensure `fetch()` calls match API routes exactly.
+5. **Start preview** — tell the user: "点击项目卡片上的预览按钮（眼睛图标）查看效果"
+6. **Show the user** — pause and wait for feedback. Do not continue until the user responds.
+7. **Iterate** — apply feedback → edit files → `dev_restart` → re-test affected endpoints with curl → tell user to refresh preview.
 
 ## Backend Guide
 
@@ -216,6 +218,52 @@ Then start with venv Python:
 dev_run(name="{app-name}-server", command=".venv/bin/uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
 ```
 
+## API Self-Testing (MANDATORY)
+
+After `dev_run` + `dev_logs` confirms the server is running, you **MUST** curl-test every API endpoint before writing any frontend code. This catches 422 errors, wrong parameter formats, and routing issues early.
+
+### How to test
+
+Use `run_command` with curl. The server port is shown in `dev_logs` output (look for "Uvicorn running on http://127.0.0.1:{port}").
+
+```bash
+# GET — simple
+curl -s http://127.0.0.1:{port}/api/health
+curl -s http://127.0.0.1:{port}/api/todos
+
+# POST with JSON body — MUST include Content-Type header
+curl -s -X POST http://127.0.0.1:{port}/api/todos \
+  -H "Content-Type: application/json" \
+  -d '{"title": "test item"}'
+
+# PUT with JSON body
+curl -s -X PUT http://127.0.0.1:{port}/api/todos/1 \
+  -H "Content-Type: application/json" \
+  -d '{"done": true}'
+
+# DELETE
+curl -s -X DELETE http://127.0.0.1:{port}/api/todos/1
+```
+
+### What to check
+
+- **200/201** — endpoint works correctly
+- **422 Unprocessable Entity** — the most common bug. Causes:
+  - Missing `Content-Type: application/json` header → FastAPI can't parse the body
+  - Route handler uses bare parameters `def create(title: str)` instead of Pydantic model `def create(body: TodoCreate)` → FastAPI treats them as query params, not JSON body
+  - Request body field names don't match the Pydantic model (e.g., sending `name` but model expects `title`)
+  - Wrong field type (e.g., sending `"123"` string but model expects `int`)
+- **404** — route path mismatch, check router prefix vs URL
+- **500** — server error, check `dev_logs` for traceback
+
+### If a test fails
+
+1. Read the error response body (`curl -s` shows it)
+2. Fix the backend code with `edit_file` (prefer over `write_file` for small fixes)
+3. `dev_restart` the server
+4. Re-run the failing curl test
+5. Do NOT proceed to frontend until ALL endpoints return expected results
+
 ## Frontend Guide
 
 ### Tech Stack
@@ -289,12 +337,25 @@ For detailed component reference, layout patterns, and Alpine.js examples, load 
 
 ## Common Pitfalls
 
+### 422 Unprocessable Entity (最常见的坑!)
+
+| 错误写法 | 正确写法 | 原因 |
+|----------|----------|------|
+| `def create(title: str)` | `def create(body: TodoCreate)` | 裸参数被 FastAPI 当作 query param，不读 JSON body |
+| `def create(data: dict)` | `def create(body: TodoCreate)` | `dict` 不是 Pydantic model，FastAPI 无法校验 |
+| 前端 `fetch(url, {body: JSON.stringify(data)})` 不加 header | 加 `headers: {"Content-Type": "application/json"}` | 没有 Content-Type，FastAPI 不知道 body 是 JSON |
+| 前端发 `{Name: "test"}` 但 model 定义 `name: str` | 字段名大小写必须完全匹配 | Pydantic 严格匹配字段名 |
+| `Form(...)` 参数但前端发 JSON | 统一用 Pydantic model 接收 JSON body | Form 和 JSON 是不同的 Content-Type，别混用 |
+
+### 其他常见问题
+
 | Pitfall | Fix |
 |---------|-----|
-| **POST/PUT 用裸参数** `def create(title: str)` | FastAPI 当作 query param → 422。**必须用 Pydantic model**: `def create(body: MyModel)` |
 | **Static mount 在 API 前面** | 吞掉所有请求返回 HTML。**必须放最后**: `app.mount("/", ...)` 在 `include_router` 之后 |
 | **SQLite 用相对路径** `"./data/app.db"` | uvicorn cwd 不确定。**用** `os.path.dirname(__file__)` 构建绝对路径 |
 | **fetch 路径不匹配 router prefix** | router 用 `prefix="/api"` → 前端必须 `fetch("api/xxx")`（无前导 `/`），不是 `fetch("/api/xxx")`（会打到主站 404） |
 | **建表不加 IF NOT EXISTS** | 服务重启报 table already exists。**始终用** `CREATE TABLE IF NOT EXISTS` |
 | **忘记关 DB 连接** | 用 `with get_db() as conn` 自动 commit + close |
 | **前端不检查 res.ok** | 后端返回 4xx/5xx 但前端当成功处理。**必须检查** `if (!res.ok)` 并读 `err.detail` |
+| **修改代码后忘记重启** | `edit_file` 改代码后必须 `dev_restart`，否则旧代码还在跑 |
+| **curl 测试不带 -s** | 不加 `-s` 会输出进度条干扰 JSON 解析，**始终用** `curl -s` |

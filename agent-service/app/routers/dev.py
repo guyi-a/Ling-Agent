@@ -21,6 +21,7 @@ from app.agent.service.process_manager import (
     stop_process as pm_stop,
     restart_process as pm_restart,
     list_processes as pm_list,
+    list_all_processes as pm_list_all,
     get_logs as pm_get_logs,
     allocate_port, release_port, detect_port,
 )
@@ -93,6 +94,29 @@ def _rewrite_cmd_for_venv(cmd_list: list[str], work_path: Path) -> list[str]:
 
     # 处理直接调用 uvicorn 的情况
     return [uvicorn_bin if arg == "uvicorn" else arg for arg in cmd_list]
+
+
+@router.get("/all")
+async def list_all(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出当前用户所有会话的后台进程"""
+    # 获取用户所有会话
+    sessions = await session_crud.get_by_user(db, current_user.user_id)
+    session_map = {s.session_id: s.title or s.session_id[:8] for s in sessions}
+    user_session_ids = set(session_map.keys())
+
+    # 获取所有进程，过滤出属于该用户的
+    all_procs = pm_list_all()
+    result = []
+    for proc in all_procs:
+        sid = proc["session_id"]
+        if sid in user_session_ids:
+            proc["session_title"] = session_map[sid]
+            result.append(proc)
+
+    return {"processes": result}
 
 
 @router.get("/{session_id}/processes")
