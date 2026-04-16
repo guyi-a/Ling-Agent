@@ -21,10 +21,10 @@ def get_checkpointer() -> InMemorySaver:
 
 def create_Ling_Agent(
     tools: List = None,
-    system_prompt: str = "You are a helpful AI assistant."
 ) -> Optional[Any]:
     """
     创建Ling Agent实例，集成 HumanInTheLoopMiddleware 做工具审批
+    系统提示词由 AgentService._build_messages() 动态注入（带 cache_control）
     """
     llm = get_llm()
     if not llm:
@@ -41,10 +41,10 @@ def create_Ling_Agent(
             for tool_name in HIGH_RISK_TOOLS
         }
 
+        # system_prompt 不在这里设置，由 _build_messages() 动态注入（带 cache_control）
         agent = create_agent(
             model=llm,
             tools=tools,
-            system_prompt=system_prompt,
             checkpointer=_checkpointer,
             middleware=[
                 HumanInTheLoopMiddleware(interrupt_on=interrupt_on)

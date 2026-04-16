@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Upload, Download, Trash2, FileText, Image as ImageIcon, File, Eye, X, RefreshCw, Package, FolderOpen, Folder, ChevronDown, ChevronRight, Play, Square, Loader2, RotateCw } from 'lucide-react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import MarkdownRenderer from '@/components/MarkdownRenderer'
+import { useThemeStore } from '@/stores/themeStore'
 import { workspaceApi } from '@/api/workspace'
 import { devApi } from '@/api/dev'
 import { useAuthStore } from '@/stores/authStore'
@@ -11,7 +16,16 @@ interface WorkspacePanelProps {
   onOpenPreview?: (url: string, title: string) => void
 }
 
+const EXT_LANG_MAP: Record<string, string> = {
+  py: 'python', js: 'javascript', ts: 'typescript', tsx: 'tsx', jsx: 'jsx',
+  css: 'css', html: 'html', json: 'json', md: 'markdown', sh: 'bash',
+  sql: 'sql', yaml: 'yaml', yml: 'yaml', xml: 'xml', toml: 'toml',
+  rs: 'rust', go: 'go', java: 'java', c: 'c', cpp: 'cpp', rb: 'ruby',
+  txt: 'text',
+}
+
 export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }: WorkspacePanelProps) {
+  const isDark = useThemeStore((state) => state.isDark)
   const [uploadFiles, setUploadFiles] = useState<WorkspaceFile[]>([])
   const [outputFiles, setOutputFiles] = useState<WorkspaceFile[]>([])
   const [projects, setProjects] = useState<ProjectInfo[]>([])
@@ -784,11 +798,23 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
                       title={previewFile.name}
                     />
                   )
-                } else if (isText) {
+                } else if (ext === 'md') {
                   return (
-                    <pre className="text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded overflow-x-auto">
-                      <code className="text-gray-900 dark:text-gray-100">{previewContent}</code>
-                    </pre>
+                    <div className="prose dark:prose-invert max-w-none">
+                      <MarkdownRenderer content={previewContent} />
+                    </div>
+                  )
+                } else if (isText) {
+                  const lang = EXT_LANG_MAP[ext || ''] || 'text'
+                  return (
+                    <SyntaxHighlighter
+                      language={lang}
+                      style={isDark ? oneDark : oneLight}
+                      customStyle={{ margin: 0, fontSize: '0.8125rem', borderRadius: '0.5rem' }}
+                      showLineNumbers
+                    >
+                      {previewContent}
+                    </SyntaxHighlighter>
                   )
                 } else {
                   return (

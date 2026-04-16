@@ -3,7 +3,6 @@ Agent Service - Ling Assistant 核心服务
 整合 LLM、工具调用、消息存储
 """
 import logging
-import re
 import json
 import asyncio
 from typing import List, Dict, Any, Optional
@@ -78,13 +77,9 @@ class AgentService:
     def _initialize_agent(self):
         """初始化 Agent 实例"""
         try:
-            # 读取核心提示词
-            system_prompt = self._load_system_prompt()
-            
-            # 创建 Agent
+            # 创建 Agent（系统提示词由 _build_messages() 动态注入，不在 agent 层设置）
             self.agent = create_Ling_Agent(
-                tools=self.tools,
-                system_prompt=system_prompt
+                tools=self.tools
             )
             
             if self.agent:
@@ -120,28 +115,10 @@ class AgentService:
             return self._get_default_prompt()
 
     def _render_system_prompt(self, session_id: str) -> str:
-        """动态渲染系统提示词，替换时间和 session_id"""
-        template = self._prompt_template
-        now = datetime.now(ZoneInfo("Asia/Shanghai"))
-
-        def replace_now(m: re.Match) -> str:
-            fmt = m.group(1)
-            return now.strftime(fmt)
-
-        # 替换 {{ now().strftime('...') }}
-        rendered = re.sub(
-            r"\{\{\s*now\(\)\.strftime\(['\"]([^'\"]+)['\"]\)\s*\}\}",
-            replace_now,
-            template
-        )
-        # 替换 {session_id}
-        rendered = rendered.replace("{session_id}", session_id)
+        """渲染系统提示词，仅替换 session_id（时间已移至动态上下文注入）"""
+        rendered = self._prompt_template.replace("{session_id}", session_id)
         return rendered
 
-    def _load_system_prompt(self) -> str:
-        """加载并立即渲染系统提示词（用于初始化 agent，session_id 留空）"""
-        return self._render_system_prompt(session_id="<session_id>")
-    
     def _get_default_prompt(self) -> str:
         """获取默认提示词"""
         return """You are Ling Assistant, a helpful Android control agent.
@@ -259,17 +236,29 @@ Always be concise and direct in your responses."""
 
         messages = []
 
-        # 在消息列表头部注入动态系统提示词
+        # 在消息列表头部注入系统提示词（带 cache_control 标记，启用 DashScope prompt caching）
         if system_prompt:
             messages.append({
                 "role": "system",
-                "content": system_prompt
+                "content": [
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"}
+                    }
+                ]
             })
 
         # 添加历史消息（如果有），转换为多模态格式
         if history:
             for msg in history:
                 messages.append(self._convert_to_multimodal_message(msg, session_id))
+
+        # 在历史消息之后、当前用户消息之前注入动态上下文（时间等）
+        # 放在缓存前缀之外，不影响缓存命中
+        now = datetime.now(ZoneInfo("Asia/Shanghai"))
+        dynamic_context = f"[System Context] Current time: {now.strftime('%Y-%m-%d %H:%M')} (Asia/Shanghai)"
+        messages.append({"role": "system", "content": dynamic_context})
 
         # 添加当前用户消息（支持附件）
         current_msg = {"role": "user", "content": user_message}
@@ -280,6 +269,21 @@ Always be concise and direct in your responses."""
                 logger.debug(f"  - {att.get('type', 'file')}: {att.get('path', 'unknown')}")
 
         messages.append(self._convert_to_multimodal_message(current_msg, session_id))
+
+        # 给最后一条 user message 注入 cache_control，使整个前缀（system prompt + 工具定义 + 历史消息）可被缓存
+        for msg in reversed(messages):
+            if msg["role"] == "user":
+                content = msg["content"]
+                if isinstance(content, str):
+                    msg["content"] = [
+                        {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                    ]
+                elif isinstance(content, list) and content:
+                    # 多模态消息（图片+文本），给最后一个 block 加标记
+                    last_block = content[-1]
+                    if isinstance(last_block, dict):
+                        last_block["cache_control"] = {"type": "ephemeral"}
+                break
 
         return messages
 
@@ -462,6 +466,14 @@ Always be concise and direct in your responses."""
         logger.info(f"🚀 会话 {session_id[:8]}... 开始执行")
 
         set_session_id(session_id)
+
+        # 清空上一轮的 checkpoint 状态，避免消息累积导致缓存前缀不一致
+        # checkpoint 仅用于同一轮内的 interrupt/resume，跨轮不需要保留
+        try:
+            await get_checkpointer().adelete_thread(session_id)
+        except Exception:
+            pass
+
         rendered_prompt = self._render_system_prompt(session_id)
         messages = self._build_messages(
             user_message, history, rendered_prompt,
@@ -541,6 +553,29 @@ Always be concise and direct in your responses."""
                                 tc_chunks[idx]["args"] += tc_args
 
                     elif kind == "on_chat_model_end":
+                        # 记录 token 用量和缓存命中情况
+                        end_output = event.get("data", {}).get("output")
+                        if end_output:
+                            usage = getattr(end_output, "usage_metadata", None)
+                            if usage:
+                                # 兼容 dict 和 UsageMetadata 对象两种形式
+                                if isinstance(usage, dict):
+                                    input_tokens = usage.get("input_tokens", 0)
+                                    output_tokens = usage.get("output_tokens", 0)
+                                    details = usage.get("input_token_details", {}) or {}
+                                else:
+                                    input_tokens = getattr(usage, "input_tokens", 0)
+                                    output_tokens = getattr(usage, "output_tokens", 0)
+                                    details = getattr(usage, "input_token_details", None)
+                                    if details and not isinstance(details, dict):
+                                        details = {k: v for k, v in details.__dict__.items() if v is not None} if hasattr(details, "__dict__") else {}
+                                    details = details or {}
+                                cache_read = details.get("cache_read", 0) or 0
+                                logger.info(
+                                    f"📊 Token 用量 | input: {input_tokens}, output: {output_tokens}, "
+                                    f"cache_hit: {cache_read}"
+                                )
+
                         if tc_chunks:
                             tc_list = []
                             for idx in sorted(tc_chunks.keys()):
