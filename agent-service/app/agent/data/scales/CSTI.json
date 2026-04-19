@@ -1,0 +1,441 @@
+{
+  "name": "CSTI",
+  "category": "趣味",
+  "title": "CSTI 校园生存类型测试",
+  "description": "Campus Survival Type Indicator。测的不是你是什么性格，而是你在学校里到底以什么形态活着。纯娱乐，不代表任何立场，请勿过度解读。",
+  "instruction": "以下每道题选一个最符合你的选项，没有对错，随心选就好。",
+  "scoring_type": "multi_dimension",
+  "questions": [
+    {
+      "id": 1, "model": "自我运行模型", "dimension": "S1 自我稳定度",
+      "text": "月考刚出成绩，你第一反应更像：",
+      "options": [
+        {"label": "完了，我果然还是不太行", "score": 0},
+        {"label": "先看看整体情况再说", "score": 1},
+        {"label": "一次成绩说明不了太多", "score": 2}
+      ]
+    },
+    {
+      "id": 2, "model": "自我运行模型", "dimension": "S1 自我稳定度",
+      "text": "看到别人又拿奖、又高分、又很会说话时，你更常出现的感觉是：",
+      "options": [
+        {"label": "人和人的差距比人和早八都大", "score": 0},
+        {"label": "会有一点波动，但还能稳住", "score": 1},
+        {"label": "羡慕归羡慕，我也有我的节奏", "score": 2}
+      ]
+    },
+    {
+      "id": 3, "model": "自我运行模型", "dimension": "S2 目标清晰度",
+      "text": "别人问你「你以后想干嘛」，你通常会：",
+      "options": [
+        {"label": "现场宕机，脑子一片空白", "score": 0},
+        {"label": "有一些模糊方向，但说不太清", "score": 1},
+        {"label": "大体知道自己想往哪走", "score": 2}
+      ]
+    },
+    {
+      "id": 4, "model": "自我运行模型", "dimension": "S2 目标清晰度",
+      "text": "新学期开始时，你对自己的状态更像：",
+      "options": [
+        {"label": "先活下来再说", "score": 0},
+        {"label": "有几个想法，但不一定能坚持", "score": 1},
+        {"label": "我知道这学期大概要抓什么", "score": 2}
+      ]
+    },
+    {
+      "id": 5, "model": "自我运行模型", "dimension": "S3 内耗浓度",
+      "text": "老师上课点了你一下名字，即使事情已经过去，你通常会：",
+      "options": [
+        {"label": "回去反复回想，越想越怪", "score": 2},
+        {"label": "过一阵就忘了", "score": 1},
+        {"label": "当场过去就过去了", "score": 0}
+      ]
+    },
+    {
+      "id": 6, "model": "自我运行模型", "dimension": "S3 内耗浓度",
+      "text": "发完一条消息后，对方迟迟没回，你的脑内通常会：",
+      "options": [
+        {"label": "自动生成八百种负面剧情", "score": 2},
+        {"label": "偶尔会想一下", "score": 1},
+        {"label": "没回就没回，我先干别的", "score": 0}
+      ]
+    },
+    {
+      "id": 7, "model": "学习运行模型", "dimension": "L1 开工阻力",
+      "text": "周末下午，你准备开始写作业，最真实的开场通常是：",
+      "options": [
+        {"label": "先躺五分钟，然后天就黑了", "score": 0},
+        {"label": "拖一下，但最后还是会开始", "score": 1},
+        {"label": "想写就直接开写", "score": 2}
+      ]
+    },
+    {
+      "id": 8, "model": "学习运行模型", "dimension": "L1 开工阻力",
+      "text": "一项任务刚布置下来时，你更像：",
+      "options": [
+        {"label": "看见了，但身体自动假装没看见", "score": 0},
+        {"label": "会记着，但不一定马上动", "score": 1},
+        {"label": "习惯早点碰一下，免得后面难受", "score": 2}
+      ]
+    },
+    {
+      "id": 9, "model": "学习运行模型", "dimension": "L2 续航执行力",
+      "text": "你学习的时候最常见的中断原因是：",
+      "options": [
+        {"label": "刚进入状态就开始想别的", "score": 0},
+        {"label": "做一会儿会分神，但还能拉回来", "score": 1},
+        {"label": "一旦进入状态，通常能撑挺久", "score": 2}
+      ]
+    },
+    {
+      "id": 10, "model": "学习运行模型", "dimension": "L2 续航执行力",
+      "text": "你做计划时，最常见的结局是：",
+      "options": [
+        {"label": "计划写得像人生重启，执行像人间蒸发", "score": 0},
+        {"label": "能完成一部分，剩下随缘", "score": 1},
+        {"label": "大体能按自己安排推进", "score": 2}
+      ]
+    },
+    {
+      "id": 11, "model": "学习运行模型", "dimension": "L3 死线反应值",
+      "text": "离截止还有三天，而你几乎没动时，你会：",
+      "options": [
+        {"label": "继续安慰自己「其实来得及」", "score": 0},
+        {"label": "开始焦虑，但不一定立刻开干", "score": 1},
+        {"label": "马上进入补救模式", "score": 2}
+      ]
+    },
+    {
+      "id": 12, "model": "学习运行模型", "dimension": "L3 死线反应值",
+      "text": "以下哪句最像你：",
+      "options": [
+        {"label": "真正的我只在死线前出现", "score": 0},
+        {"label": "我偶尔会拖，但不会太离谱", "score": 1},
+        {"label": "我很讨厌被截止日期追着跑", "score": 2}
+      ]
+    },
+    {
+      "id": 13, "model": "校园社交模型", "dimension": "C1 群体存在感",
+      "text": "在班级群、课程群、小组群里，你通常是：",
+      "options": [
+        {"label": "高级潜水生物", "score": 0},
+        {"label": "看情况发言", "score": 1},
+        {"label": "经常会成为那个出来说话的人", "score": 2}
+      ]
+    },
+    {
+      "id": 14, "model": "校园社交模型", "dimension": "C1 群体存在感",
+      "text": "小组作业第一次开会时，你通常会：",
+      "options": [
+        {"label": "先静音观察，等别人开口", "score": 0},
+        {"label": "别人问到我我就接", "score": 1},
+        {"label": "如果场子太冷，我会主动推进", "score": 2}
+      ]
+    },
+    {
+      "id": 15, "model": "校园社交模型", "dimension": "C2 边界合群度",
+      "text": "刚认识的新同学如果很热情，你更容易：",
+      "options": [
+        {"label": "本能后退半步，先观察", "score": 0},
+        {"label": "先礼貌接住，再慢慢看", "score": 1},
+        {"label": "只要气氛对，我熟得也挺快", "score": 2}
+      ]
+    },
+    {
+      "id": 16, "model": "校园社交模型", "dimension": "C2 边界合群度",
+      "text": "宿舍/同学关系里，你更接近：",
+      "options": [
+        {"label": "我需要自己的空间，别贴太近", "score": 0},
+        {"label": "我能合群，但也要看状态", "score": 1},
+        {"label": "熟了以后我会挺愿意黏在一起", "score": 2}
+      ]
+    },
+    {
+      "id": 17, "model": "校园社交模型", "dimension": "C3 人格切换率",
+      "text": "你在老师、同学、朋友面前会是同一个版本吗？",
+      "options": [
+        {"label": "差别不大，我就这样", "score": 0},
+        {"label": "会有一点切换", "score": 1},
+        {"label": "完全像不同账号登录", "score": 2}
+      ]
+    },
+    {
+      "id": 18, "model": "校园社交模型", "dimension": "C3 人格切换率",
+      "text": "有时候你明明有真实想法，但最后没说，通常是因为：",
+      "options": [
+        {"label": "我一般会直接表达", "score": 0},
+        {"label": "懒得解释，或者觉得没必要", "score": 1},
+        {"label": "不想暴露真实状态，先演一下", "score": 2}
+      ]
+    },
+    {
+      "id": 19, "model": "情绪存活模型", "dimension": "E1 破防阈值",
+      "text": "最近事情一多的时候，你最容易出现的是：",
+      "options": [
+        {"label": "很快就开始烦、急、想逃", "score": 2},
+        {"label": "会波动，但还能顶一下", "score": 1},
+        {"label": "我通常还能保持基本稳定", "score": 0}
+      ]
+    },
+    {
+      "id": 20, "model": "情绪存活模型", "dimension": "E1 破防阈值",
+      "text": "下面哪种情况最容易让你瞬间破防：",
+      "options": [
+        {"label": "一点小事叠一点小事，最后全炸", "score": 2},
+        {"label": "真正的大事才会炸", "score": 1},
+        {"label": "大多数事我都还能消化", "score": 0}
+      ]
+    },
+    {
+      "id": 21, "model": "情绪存活模型", "dimension": "E2 恢复速度",
+      "text": "一次考试/发言/社交翻车之后，你通常多久缓过来：",
+      "options": [
+        {"label": "能记很久，反复回味", "score": 0},
+        {"label": "一阵子后会好", "score": 1},
+        {"label": "当天难受一下，后面基本翻篇", "score": 2}
+      ]
+    },
+    {
+      "id": 22, "model": "情绪存活模型", "dimension": "E2 恢复速度",
+      "text": "你情绪低落的时候，通常：",
+      "options": [
+        {"label": "会陷进去，越待越深", "score": 0},
+        {"label": "需要一点时间慢慢恢复", "score": 1},
+        {"label": "我一般有办法把自己捞回来", "score": 2}
+      ]
+    },
+    {
+      "id": 23, "model": "情绪存活模型", "dimension": "E3 代偿方式",
+      "text": "你最常用的续命方式是：",
+      "options": [
+        {"label": "睡觉/装死/直接离线", "score": 0},
+        {"label": "刷点东西、找点轻松的事缓冲", "score": 1},
+        {"label": "吐槽、发疯、找人说出来，处理掉", "score": 2}
+      ]
+    },
+    {
+      "id": 24, "model": "情绪存活模型", "dimension": "E3 代偿方式",
+      "text": "晚上状态不好的时候，你更容易：",
+      "options": [
+        {"label": "自己一个人闷着", "score": 0},
+        {"label": "边刷手机边慢慢缓", "score": 1},
+        {"label": "发点东西/找人说话/输出情绪", "score": 2}
+      ]
+    },
+    {
+      "id": 25, "model": "校园现实模型", "dimension": "R1 规则适配度",
+      "text": "面对签到、查寝、早八、形式任务这些东西，你通常：",
+      "options": [
+        {"label": "天然烦，能钻就钻", "score": 0},
+        {"label": "烦归烦，但一般还是会应付", "score": 1},
+        {"label": "会尽量按规则走，省麻烦", "score": 2}
+      ]
+    },
+    {
+      "id": 26, "model": "校园现实模型", "dimension": "R1 规则适配度",
+      "text": "老师突然说「这个不交会影响平时分」，你最常见的反应是：",
+      "options": [
+        {"label": "第一反应是：这也太有病了", "score": 0},
+        {"label": "心里骂两句，然后开始想办法", "score": 1},
+        {"label": "那就先交了，别给自己留坑", "score": 2}
+      ]
+    },
+    {
+      "id": 27, "model": "校园现实模型", "dimension": "R2 风险操作欲",
+      "text": "截止前一晚还没写完任务时，你更常见的想法是：",
+      "options": [
+        {"label": "也许老师不会细看", "score": 2},
+        {"label": "先交点能交的", "score": 1},
+        {"label": "不喜欢赌，能补多少补多少", "score": 0}
+      ]
+    },
+    {
+      "id": 28, "model": "校园现实模型", "dimension": "R2 风险操作欲",
+      "text": "对「明天再说」这件事，你更接近：",
+      "options": [
+        {"label": "这是我人生的一种核心方法", "score": 2},
+        {"label": "我偶尔会这样", "score": 1},
+        {"label": "我尽量不把雷留到明天", "score": 0}
+      ]
+    },
+    {
+      "id": 29, "model": "校园现实模型", "dimension": "R3 现实求生脑",
+      "text": "如果你突然发现自己忘了一项重要作业/通知，你通常会：",
+      "options": [
+        {"label": "先慌，再短暂装死", "score": 0},
+        {"label": "一边慌一边补救", "score": 1},
+        {"label": "直接进入解决问题模式", "score": 2}
+      ]
+    },
+    {
+      "id": 30, "model": "校园现实模型", "dimension": "R3 现实求生脑",
+      "text": "当事情已经来不及完美处理时，你更可能：",
+      "options": [
+        {"label": "脑子空白，想逃离地球", "score": 0},
+        {"label": "先做个差不多版本顶上", "score": 1},
+        {"label": "迅速判断最优解，把损失压到最小", "score": 2}
+      ]
+    },
+    {
+      "id": 31, "model": "", "dimension": "状态门",
+      "text": "你最近最像靠什么活着：",
+      "options": [
+        {"label": "睡觉，能睡就睡", "score": 0},
+        {"label": "手机，先刷了再说", "score": 1},
+        {"label": "死线，越到最后越像活人", "score": 2},
+        {"label": "深夜，天一黑我人格才完整", "score": 3}
+      ]
+    },
+    {
+      "id": 32, "model": "", "dimension": "特殊追问",
+      "text": "对「还有时间」这句话，你最真实的理解是：",
+      "show_condition": {"q": 31, "score": 2},
+      "options": [
+        {"label": "真的还有时间，先不急", "score": 0},
+        {"label": "我知道不多了，但还想再等等", "score": 1},
+        {"label": "不到最后一刻，我的灵魂不会同意启动", "score": 2}
+      ]
+    },
+    {
+      "id": 33, "model": "", "dimension": "特殊追问",
+      "text": "一到凌晨，你通常会：",
+      "show_condition": {"q": 31, "score": 3},
+      "options": [
+        {"label": "情绪、灵感、内耗一起复活", "score": 2},
+        {"label": "比白天清醒一点，但也看情况", "score": 1},
+        {"label": "其实也还好，只是晚睡而已", "score": 0}
+      ]
+    }
+  ],
+  "scoring": {
+    "type": "multi_dimension",
+    "note": "CSTI采用五大模型十五维度评分，结果为趣味校园生存标签，非标准心理量表。纯娱乐。",
+
+    "step1_per_question": {
+      "description": "每题3个选项，score = 0 / 1 / 2。反向计分已在选项中直接体现正确score值，无需额外转换。",
+      "use_raw_scores": true,
+      "gate_question": {
+        "id": 31,
+        "description": "状态门：不参与维度计分，选C(score=2)触发DDL追问(Q32)，选D(score=3)触发NIGHT追问(Q33)"
+      },
+      "special_questions": {
+        "ids": [32, 33],
+        "description": "特殊追问题，仅在状态门触发时出现，用于判断是否命中特殊结果，不参与常规维度计分"
+      }
+    },
+
+    "step2_dimension_score": {
+      "description": "每个维度有2道题，两题score相加得raw_score（范围0-4），再映射到L/M/H",
+      "lmh_thresholds": {
+        "L": [0, 1],
+        "M": [2, 2],
+        "H": [3, 4]
+      }
+    },
+
+    "step3_pattern": {
+      "description": "按固定顺序拼出15位 L/M/H pattern，每3位一组用-分隔",
+      "order": ["S1", "S2", "S3", "E1", "E2", "E3", "L1", "L2", "L3", "C1", "C2", "C3", "R1", "R2", "R3"],
+      "example": "HHH-LMH-MHH-HHH-MHM"
+    },
+
+    "step4_match_personality": {
+      "description": "与25个标准人格的pattern计算曼哈顿距离，取最小者",
+      "distance_encoding": {"L": 1, "M": 2, "H": 3},
+      "similarity_formula": "max(0, round((1 - distance / 30) * 100))"
+    },
+
+    "special_rules": {
+      "priority": "特殊规则优先级最高，在step4之前判断",
+      "DDL": {
+        "trigger": "Q31选C(score=2) 且 Q32选C(score=2)",
+        "conditions": [{"q": 31, "score": 2}, {"q": 32, "score": 2}],
+        "result_label": "DDL"
+      },
+      "NIGHT": {
+        "trigger": "Q31选D(score=3) 且 Q33选A(score=2)",
+        "conditions": [{"q": 31, "score": 3}, {"q": 33, "score": 2}],
+        "result_label": "NIGHT"
+      },
+      "HHHH": {
+        "trigger": "step4 最佳相似度 < 60%",
+        "result": "兜底判定为 HHHH 抽象乱炖体"
+      }
+    },
+
+    "dimension_question_map": {
+      "S1 自我稳定度":  [1, 2],
+      "S2 目标清晰度":  [3, 4],
+      "S3 内耗浓度":    [5, 6],
+      "E1 破防阈值":    [19, 20],
+      "E2 恢复速度":    [21, 22],
+      "E3 代偿方式":    [23, 24],
+      "L1 开工阻力":    [7, 8],
+      "L2 续航执行力":  [9, 10],
+      "L3 死线反应值":  [11, 12],
+      "C1 群体存在感":  [13, 14],
+      "C2 边界合群度":  [15, 16],
+      "C3 人格切换率":  [17, 18],
+      "R1 规则适配度":  [25, 26],
+      "R2 风险操作欲":  [27, 28],
+      "R3 现实求生脑":  [29, 30]
+    },
+
+    "models": {
+      "自我运行模型": {
+        "dimensions": ["S1 自我稳定度", "S2 目标清晰度", "S3 内耗浓度"],
+        "description": "衡量你对自己的评价稳不稳、有没有方向感、脑内反刍强不强"
+      },
+      "情绪存活模型": {
+        "dimensions": ["E1 破防阈值", "E2 恢复速度", "E3 代偿方式"],
+        "description": "衡量你多容易崩、崩了多久能回来、靠什么把自己救回来"
+      },
+      "学习运行模型": {
+        "dimensions": ["L1 开工阻力", "L2 续航执行力", "L3 死线反应值"],
+        "description": "衡量你开始做事难不难、能不能持续、面对deadline的真实反应"
+      },
+      "校园社交模型": {
+        "dimensions": ["C1 群体存在感", "C2 边界合群度", "C3 人格切换率"],
+        "description": "衡量你在群体里的存在感、和人熟起来的方式、会不会切换人格"
+      },
+      "校园现实模型": {
+        "dimensions": ["R1 规则适配度", "R2 风险操作欲", "R3 现实求生脑"],
+        "description": "衡量你跟学校规则的关系、敢不敢赌、事情来了怎么处理"
+      }
+    },
+
+    "personalities": {
+      "note": "共25个标准人格 + 3个特殊结果(HHHH兜底 + DDL/NIGHT特殊触发)。pattern顺序：S1·S2·S3·E1·E2·E3·L1·L2·L3·C1·C2·C3·R1·R2·R3",
+      "patterns": {
+        "CTRL":   {"title": "控场学习体",   "subtitle": "你像一个活人版日程表",           "pattern": "HHH-HMH-HHH-HHH-MHM"},
+        "BOSS":   {"title": "班味指挥官",   "subtitle": "算了，还是我来吧",               "pattern": "HHH-HMH-MHH-HHH-LHL"},
+        "GOGO":   {"title": "冲刺推进器",   "subtitle": "越急越能跑，遇强则强",           "pattern": "HHM-HMH-MMH-HHH-MHM"},
+        "POOR":   {"title": "穷且专注体",   "subtitle": "低调活着，关键时刻出刀",         "pattern": "HHL-MLH-LMH-HHH-LHL"},
+        "THIN-K": {"title": "过载思考机",   "subtitle": "脑内先推演18个版本才肯动",       "pattern": "HHL-HMH-MLH-MHM-LHH"},
+        "OJBK":   {"title": "差不多同学",   "subtitle": "行，能过就行",                   "pattern": "MMH-MMM-HML-LMM-MML"},
+        "THAN-K": {"title": "知足保命体",   "subtitle": "会焦虑，但也知道怎么把自己劝回来","pattern": "MHM-HMM-HHM-MMH-MHL"},
+        "MUM":    {"title": "宿舍妈咪人",   "subtitle": "嘴上烦，身体已经去救场了",       "pattern": "MMH-MHL-HMM-LMM-HLL"},
+        "MONK":   {"title": "无欲修学体",   "subtitle": "你活得像已经提前毕业",           "pattern": "HHL-LLH-LLM-MML-LHM"},
+        "ZZZZ":   {"title": "低电量存活体", "subtitle": "活着全靠省电模式",               "pattern": "MHL-MLH-LML-MML-LHM"},
+        "SEXY":   {"title": "校园发光体",   "subtitle": "不一定故意，但就是容易被看见",   "pattern": "HMH-HHL-HMM-HMM-HLH"},
+        "LOVE-R": {"title": "情绪投射体",   "subtitle": "一旦投入，就不太是浅浅投入",     "pattern": "MLH-LHL-HLH-MLM-MLH"},
+        "ATM-er": {"title": "全场请客人",   "subtitle": "对别人太好是你的天赋，也是工伤", "pattern": "HHH-HHM-HHH-HMH-MHL"},
+        "FAKE":   {"title": "场景切换人",   "subtitle": "见人说人话，见老师说老师话",     "pattern": "HLM-MML-MLM-MLM-HLH"},
+        "JOKE-R": {"title": "搞笑续命体",   "subtitle": "先把情绪做成一个梗",             "pattern": "LLH-LHL-LML-LLL-MLM"},
+        "MALO":   {"title": "混乱小猴体",   "subtitle": "同时开了很多标签页的大脑",       "pattern": "MLH-MHM-MLH-MLH-LMH"},
+        "WOC!":   {"title": "震惊反应堆",   "subtitle": "活得很有参与感，也很容易被吓到", "pattern": "HHL-HMH-MMH-HHM-LHH"},
+        "OH-NO":  {"title": "预警雷达体",   "subtitle": "别人还没觉得怎样，你已经开始担心了","pattern": "HHL-LMH-LHH-HHM-LHL"},
+        "SHIT":   {"title": "破防吐槽机",   "subtitle": "你真的很难装作一切合理",         "pattern": "HHL-HLH-LMM-HHM-LHH"},
+        "FUCK":   {"title": "反骨野生体",   "subtitle": "一直在跟系统对着活",             "pattern": "MLL-LHL-LLM-MLL-HLH"},
+        "IMSB":   {"title": "自嘲脆脆鲨",   "subtitle": "别人还没评价你，你已经处理完了", "pattern": "LLM-LMM-LLL-LLL-MLM"},
+        "IMFW":   {"title": "易碎预备役",   "subtitle": "感受力很强，所以也更容易被伤到", "pattern": "LLH-LHL-LML-LLL-MLL"},
+        "SOLO":   {"title": "单人离线体",   "subtitle": "哪怕在线，也常常像精神单机版",   "pattern": "LML-LLH-LHL-LML-LHM"},
+        "DEAD":   {"title": "灵魂待机体",   "subtitle": "系统为了活下去，把很多反馈都静音了","pattern": "LLL-LLM-LML-LLL-LHM"},
+        "DIOR-S": {"title": "冷眼现实派",   "subtitle": "太懂现实会怎么把美好磨掉",       "pattern": "MHM-MMH-MHM-HMH-LHL"},
+        "HHHH":   {"title": "抽象乱炖体",   "subtitle": "不是系统看不懂你，就是你今天本来就不稳定", "pattern": null, "special": "fallback"},
+        "DDL":    {"title": "死线返魂体",   "subtitle": "平时像没开机，临近截止像灵魂突然返厂升级", "pattern": null, "special": "override"},
+        "NIGHT":  {"title": "凌晨人格体",   "subtitle": "你真正的自己不在白天上线",       "pattern": null, "special": "override"}
+      }
+    }
+  }
+}

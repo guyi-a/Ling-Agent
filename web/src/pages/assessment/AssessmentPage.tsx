@@ -153,7 +153,7 @@ export default function AssessmentPage() {
 
   const handleSubmit = async () => {
     if (!activeScale) return
-    const answerList = activeScale.questions.map(q => ({ q: q.id, score: answers[q.id] ?? 0 }))
+    const answerList = activeQuestions.map(q => ({ q: q.id, score: answers[q.id] ?? 0 }))
     try {
       setSubmitting(true)
       const res = await healthApi.submitAssessment({ scale_type: activeScale.name, answers: answerList })
@@ -173,10 +173,18 @@ export default function AssessmentPage() {
     setResult(null)
     setAnswers({})
     setDraftRestored(false)
+    refreshDrafts()
   }
 
-  const question = activeScale?.questions[currentQ]
-  const allAnswered = activeScale ? activeScale.questions.every(q => answers[q.id] !== undefined) : false
+  // 条件题过滤（CSTI Q32/Q33 等）
+  const activeQuestions = activeScale
+    ? activeScale.questions.filter(q => {
+        if (!q.show_condition) return true
+        return answers[q.show_condition.q] === q.show_condition.score
+      })
+    : []
+  const question = activeQuestions[currentQ]
+  const allAnswered = activeQuestions.every(q => answers[q.id] !== undefined)
   const resultDetail = result?.result_detail ? (() => { try { return JSON.parse(result.result_detail!) } catch { return null } })() : null
   const resultType = result?.result_type || 'severity'
 
@@ -298,7 +306,7 @@ export default function AssessmentPage() {
               {draftRestored && (
                 <div className="mb-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm">
                   <span className="text-amber-700 dark:text-amber-300">
-                    已恢复上次进度（第 {currentQ + 1}/{activeScale.questions.length} 题）
+                    已恢复上次进度（第 {currentQ + 1}/{activeQuestions.length} 题）
                   </span>
                   <button
                     onClick={restartAssessment}
@@ -311,13 +319,13 @@ export default function AssessmentPage() {
               {/* 进度条 */}
               <div className="mb-6">
                 <div className="flex justify-between text-xs text-[#b8a080] dark:text-gray-500 mb-1.5">
-                  <span>第 {currentQ + 1} / {activeScale.questions.length} 题</span>
-                  <span>{Math.round(((currentQ + 1) / activeScale.questions.length) * 100)}%</span>
+                  <span>第 {currentQ + 1} / {activeQuestions.length} 题</span>
+                  <span>{Math.round(((currentQ + 1) / activeQuestions.length) * 100)}%</span>
                 </div>
                 <div className="w-full h-2 bg-[#e8dcc8] dark:bg-gray-700 rounded-full overflow-hidden">
                   <div
                     className="h-2 bg-[#c9a87c] rounded-full transition-all"
-                    style={{ width: `${((currentQ + 1) / activeScale.questions.length) * 100}%` }}
+                    style={{ width: `${((currentQ + 1) / activeQuestions.length) * 100}%` }}
                   />
                 </div>
               </div>
@@ -352,7 +360,7 @@ export default function AssessmentPage() {
                   <ChevronLeft className="w-4 h-4" /> 上一题
                 </button>
 
-                {currentQ < activeScale.questions.length - 1 ? (
+                {currentQ < activeQuestions.length - 1 ? (
                   <button
                     onClick={() => { const q = currentQ + 1; setCurrentQ(q); if (activeScale) saveDraft(activeScale.name, answers, q) }}
                     disabled={answers[question.id] === undefined}
@@ -443,6 +451,9 @@ export default function AssessmentPage() {
                   <>
                     <div className="text-lg font-bold text-pink-600 dark:text-pink-400 mb-1 tracking-widest">{resultDetail.label}</div>
                     <div className="text-3xl font-bold text-[#5a4a3a] dark:text-gray-100 mb-2">{resultDetail.title}</div>
+                    {resultDetail.subtitle && (
+                      <div className="text-sm text-[#8b7355] dark:text-gray-400 mb-3">{resultDetail.subtitle}</div>
+                    )}
                     {resultDetail.similarity != null && (
                       <div className="text-sm text-[#b8a080] dark:text-gray-500 mb-4">
                         匹配度 <span className="font-bold text-pink-600 dark:text-pink-400">{resultDetail.similarity}%</span>

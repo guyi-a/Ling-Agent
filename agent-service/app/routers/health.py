@@ -116,8 +116,8 @@ async def get_scales():
                 category=data.get("category", ""),
                 title=data["title"],
                 description=data["description"],
-                question_count=len(data.get("questions", [])),
-                estimated_minutes=max(1, len(data.get("questions", [])) // 3),
+                question_count=len([q for q in data.get("questions", []) if not q.get("show_condition")]),
+                estimated_minutes=max(1, len([q for q in data.get("questions", []) if not q.get("show_condition")]) // 3),
                 scoring_type=scoring_type,
             ))
         except Exception:

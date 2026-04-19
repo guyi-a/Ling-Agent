@@ -68,6 +68,7 @@ export interface ScaleData {
     id: number
     text: string
     options: { label: string; score: number }[]
+    show_condition?: { q: number; score: number }
   }[]
   scoring: Record<string, unknown>
 }

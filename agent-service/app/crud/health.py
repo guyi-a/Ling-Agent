@@ -183,13 +183,35 @@ def _score_dimensions(scale_data: dict, answers: list) -> dict:
 
 
 def _score_multi_dimension(scale_data: dict, answers: list) -> dict:
-    """SBTI 多维度计分：15维度→L/M/H pattern→曼哈顿距离匹配"""
+    """多维度计分（SBTI/CSTI）：15维度→L/M/H pattern→曼哈顿距离匹配"""
     scoring = scale_data["scoring"]
     answer_map = {a["q"]: a["score"] for a in answers}
+    step1 = scoring.get("step1_per_question", {})
+    special_rules = scoring.get("special_rules", {})
+    patterns_data = scoring.get("personalities", {}).get("patterns", {})
 
-    # ── 特殊规则：q4 选"饮酒"→ DRUN-K ──
-    gate_qid = scoring.get("step1_per_question", {}).get("gate_question", {}).get("id")
-    if gate_qid and answer_map.get(gate_qid) == 2:
+    # ── 特殊规则（conditions 方式，CSTI DDL/NIGHT 等） ──
+    for rule_key, rule_info in special_rules.items():
+        if not isinstance(rule_info, dict) or rule_key in ("priority", "HHHH"):
+            continue
+        conditions = rule_info.get("conditions")
+        if conditions and all(answer_map.get(c["q"]) == c["score"] for c in conditions):
+            result_label = rule_info.get("result_label", rule_key)
+            info = patterns_data.get(result_label, {})
+            return {
+                "result_type": "label",
+                "severity": result_label,
+                "total_score": 100,
+                "result_detail": json.dumps({
+                    "label": result_label, "title": info.get("title", ""),
+                    "similarity": 100, "pattern": None,
+                    "special_rule": rule_key,
+                }, ensure_ascii=False),
+            }
+
+    # ── 特殊规则（legacy 方式，SBTI DRUN-K） ──
+    gate_qid = step1.get("gate_question", {}).get("id")
+    if gate_qid and answer_map.get(gate_qid) == 2 and "DRUN-K" in patterns_data:
         return {
             "result_type": "label",
             "severity": "DRUN-K",
@@ -201,17 +223,23 @@ def _score_multi_dimension(scale_data: dict, answers: list) -> dict:
             }, ensure_ascii=False),
         }
 
-    # ── Step 1: 每题 value（1/2/3），反向题 3/2/1 ──
-    reverse_qs = set(scoring.get("step1_per_question", {}).get("reverse_questions", []))
+    # ── Step 1: 每题计分 ──
+    use_raw_scores = step1.get("use_raw_scores", False)
+    reverse_qs = set(step1.get("reverse_questions", []))
 
     def get_value(qid: int, score: int) -> int:
+        if use_raw_scores:
+            return score                # CSTI: 直接用 0/1/2
         if qid in reverse_qs:
-            return 3 - score        # reverse: 0→3, 1→2, 2→1
-        return score + 1            # normal:  0→1, 1→2, 2→3
+            return 3 - score            # SBTI reverse: 0→3, 1→2, 2→1
+        return score + 1                # SBTI normal:  0→1, 1→2, 2→3
+
+    default_score = 0 if use_raw_scores else 1
 
     # ── Step 2: 维度 raw score → L/M/H ──
     dim_map = scoring.get("dimension_question_map", {})
     dim_order = scoring.get("step3_pattern", {}).get("order", [])
+    lmh_thresholds = scoring.get("step2_dimension_score", {}).get("lmh_thresholds")
 
     dim_scores = {}
     dim_lmh = {}
@@ -222,14 +250,22 @@ def _score_multi_dimension(scale_data: dict, answers: list) -> dict:
             dim_scores[dim_key] = 0
             continue
         q_ids = dim_map[full_key]
-        raw = sum(get_value(qid, answer_map.get(qid, 1)) for qid in q_ids)
+        raw = sum(get_value(qid, answer_map.get(qid, default_score)) for qid in q_ids)
         dim_scores[dim_key] = raw
-        if raw <= 3:
-            dim_lmh[dim_key] = "L"
-        elif raw == 4:
-            dim_lmh[dim_key] = "M"
+        if lmh_thresholds:
+            if lmh_thresholds["L"][0] <= raw <= lmh_thresholds["L"][1]:
+                dim_lmh[dim_key] = "L"
+            elif lmh_thresholds["H"][0] <= raw <= lmh_thresholds["H"][1]:
+                dim_lmh[dim_key] = "H"
+            else:
+                dim_lmh[dim_key] = "M"
         else:
-            dim_lmh[dim_key] = "H"
+            if raw <= 3:
+                dim_lmh[dim_key] = "L"
+            elif raw == 4:
+                dim_lmh[dim_key] = "M"
+            else:
+                dim_lmh[dim_key] = "H"
 
     # ── Step 3: 拼 15 位 pattern ──
     pattern_chars = [dim_lmh.get(d, "M") for d in dim_order]
@@ -268,26 +304,32 @@ def _score_multi_dimension(scale_data: dict, answers: list) -> dict:
     # HHHH 兜底
     if best_sim < 60 or not best_label:
         hhhh = patterns_data.get("HHHH", {})
+        detail = {
+            "label": "HHHH", "title": hhhh.get("title", "未分类人格"),
+            "similarity": best_sim, "pattern": formatted,
+            "dimensions": dim_detail,
+        }
+        if hhhh.get("subtitle"):
+            detail["subtitle"] = hhhh["subtitle"]
         return {
             "result_type": "label",
             "severity": "HHHH",
             "total_score": best_sim,
-            "result_detail": json.dumps({
-                "label": "HHHH", "title": hhhh.get("title", "未分类人格"),
-                "similarity": best_sim, "pattern": formatted,
-                "dimensions": dim_detail,
-            }, ensure_ascii=False),
+            "result_detail": json.dumps(detail, ensure_ascii=False),
         }
 
+    detail = {
+        "label": best_label, "title": best_info.get("title", ""),
+        "similarity": best_sim, "pattern": formatted,
+        "dimensions": dim_detail,
+    }
+    if best_info.get("subtitle"):
+        detail["subtitle"] = best_info["subtitle"]
     return {
         "result_type": "label",
         "severity": best_label,
         "total_score": best_sim,
-        "result_detail": json.dumps({
-            "label": best_label, "title": best_info.get("title", ""),
-            "similarity": best_sim, "pattern": formatted,
-            "dimensions": dim_detail,
-        }, ensure_ascii=False),
+        "result_detail": json.dumps(detail, ensure_ascii=False),
     }
 
 
