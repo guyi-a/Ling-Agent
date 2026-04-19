@@ -1,0 +1,59 @@
+{
+  "name": "GAD-7",
+  "category": "焦虑",
+  "title": "广泛性焦虑障碍量表-7",
+  "description": "评估过去两周的焦虑症状，共7题",
+  "instruction": "在过去的两周里，以下问题困扰您的频率是？",
+  "questions": [
+    {"id": 1, "text": "感觉紧张、焦虑或急切", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 2, "text": "不能够停止或控制担忧", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 3, "text": "对各种各样的事情担忧过多", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 4, "text": "很难放松下来", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 5, "text": "由于不安而无法静坐", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 6, "text": "变得容易烦恼或急躁", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 7, "text": "感到似乎将有可怕的事情发生而害怕", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]}
+  ],
+  "scoring": {
+    "ranges": [
+      {"min": 0, "max": 4, "severity": "正常", "description": "没有或极少焦虑症状"},
+      {"min": 5, "max": 9, "severity": "轻度焦虑", "description": "存在轻度焦虑症状，建议关注情绪变化"},
+      {"min": 10, "max": 14, "severity": "中度焦虑", "description": "存在中度焦虑症状，建议寻求专业心理咨询"},
+      {"min": 15, "max": 21, "severity": "重度焦虑", "description": "存在重度焦虑症状，强烈建议尽快就医"}
+    ]
+  }
+}

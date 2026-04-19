@@ -16,7 +16,7 @@ class Session(Base):
     user_id = Column(String(100), ForeignKey("users.user_id"), nullable=False, index=True)  # 外键关联用户
     title = Column(String(200))  # 会话标题
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     is_pinned = Column(Boolean, default=False)
     

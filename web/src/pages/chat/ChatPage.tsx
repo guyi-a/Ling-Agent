@@ -608,7 +608,7 @@ export default function ChatPage() {
   }, [])
 
   return (
-    <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen flex bg-[#f5f0e8] dark:bg-gray-900">
       {/* Left Sidebar - Sessions */}
       <SessionSidebar
         currentSessionId={selectedSessionId ?? currentSessionId}
@@ -619,7 +619,7 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 gradient-bg-light">
+        <header className="border-b border-[#e0d5c3] dark:border-gray-700 p-4 bg-[#fefcf3]/80 dark:bg-gray-800 backdrop-blur">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-accent-600 flex items-center justify-center shadow-lg flex-shrink-0">
@@ -979,7 +979,7 @@ export default function ChatPage() {
         </main>
 
         {/* Input */}
-        <footer className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
+        <footer className="border-t border-[#e0d5c3] dark:border-gray-700 p-4 bg-[#fefcf3]/80 dark:bg-gray-800 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             {/* 附件和粘贴图片预览区 */}
             {(selectedFiles.length > 0 || pastedImages.length > 0) && (

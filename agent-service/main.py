@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from app.models import *
 
 # 导入路由
-from app.routers import auth_router, user_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router
+from app.routers import auth_router, user_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router, health_router
 
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
@@ -32,8 +32,15 @@ async def lifespan(app: FastAPI):
     # 启动时创建数据库表
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 初始化 checkpointer（AsyncSqliteSaver，持久化 LangGraph checkpoint）
+    from app.agent.infra.agent_factory import init_checkpointer, close_checkpointer
+    await init_checkpointer("data/checkpoints.db")
+
     yield
-    # 进程独立运行，主服务重启不影响
+
+    # 关闭 checkpointer
+    await close_checkpointer()
 
 # 创建FastAPI应用实例
 app = FastAPI(
@@ -140,6 +147,7 @@ app.include_router(chat_router)
 app.include_router(workspace_router)
 app.include_router(dev_router)
 app.include_router(preview_router)
+app.include_router(health_router)
 
 # 挂载前端静态文件
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")

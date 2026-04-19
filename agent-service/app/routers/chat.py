@@ -246,7 +246,8 @@ async def chat_stream(
                         session_id=session.session_id,
                         user_message=request.message,
                         history=history,
-                        attachments=request.attachments
+                        attachments=request.attachments,
+                        user_id=current_user.user_id,
                     ):
                         # 内部标记：DB 保存点，不发给前端
                         if chunk.get("type") == "_save_point":

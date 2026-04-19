@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, MessageSquare, Trash2, Edit2, Check, X, Search, Pin, PinOff, SquarePen, Box } from 'lucide-react'
+import { Plus, MessageSquare, Trash2, Edit2, Check, X, Search, Pin, PinOff, SquarePen, Box, Heart, ClipboardList } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { sessionsApi } from '@/api/sessions'
 import { useAuthStore } from '@/stores/authStore'
@@ -157,9 +157,9 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
   }
 
   return (
-    <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+    <div className="w-64 bg-[#fefcf3] dark:bg-gray-800 border-r border-[#e0d5c3] dark:border-gray-700 flex flex-col">
       {/* Header */}
-      <div className="p-3 space-y-0.5 border-b border-gray-200 dark:border-gray-700">
+      <div className="p-3 space-y-0.5 border-b border-[#e0d5c3] dark:border-gray-700">
         <button
           onClick={handleNewChat}
           className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
@@ -182,6 +182,22 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
         >
           <Box className="w-4 h-4 text-gray-500 dark:text-gray-400" />
           应用管理
+        </button>
+
+        <button
+          onClick={() => navigate('/diary')}
+          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
+        >
+          <Heart className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          心理日记
+        </button>
+
+        <button
+          onClick={() => navigate('/assessment')}
+          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
+        >
+          <ClipboardList className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          心理测评
         </button>
 
         {/* 搜索框（点击展开） */}

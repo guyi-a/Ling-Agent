@@ -7,6 +7,8 @@ from .user import User
 from .account import Account
 from .session import Session
 from .message import Message
+from .health_record import HealthRecord
+from .assessment import Assessment
 
 # 对外暴露的模型
 __all__ = [
@@ -15,4 +17,6 @@ __all__ = [
     "Account",
     "Session",
     "Message",
+    "HealthRecord",
+    "Assessment",
 ]

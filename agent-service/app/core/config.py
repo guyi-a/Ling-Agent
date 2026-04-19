@@ -28,10 +28,13 @@ class Settings(BaseSettings):
     # Memory Configuration
     MEMORY_MAX_TOKENS: int = 2000
 
-    # Applicatio
+    # Application
     PORT: int = 9000
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
+
+    # Prompt mode: "core" (default) or "psych" (psychology health competition)
+    PROMPT_MODE: str = "core"
 
     # Langfuse Observability (optional)
     LANGFUSE_PUBLIC_KEY: Optional[str] = None

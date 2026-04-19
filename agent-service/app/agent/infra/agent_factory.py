@@ -5,17 +5,39 @@ import logging
 from typing import Optional, List, Any
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
-from langgraph.checkpoint.memory import InMemorySaver
 from app.agent.infra.llm_factory import get_llm
 from app.core.approval import HIGH_RISK_TOOLS
 
 logger = logging.getLogger(__name__)
 
-# 全局 checkpointer（单进程内共享，用于 interrupt/resume）
-_checkpointer = InMemorySaver()
+# checkpointer 由 init_checkpointer() 异步初始化
+_checkpointer = None
 
 
-def get_checkpointer() -> InMemorySaver:
+async def init_checkpointer(db_path: str = "data/checkpoints.db"):
+    """启动时调用，初始化 AsyncSqliteSaver"""
+    global _checkpointer
+    import os
+    import aiosqlite
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = await aiosqlite.connect(db_path)
+    _checkpointer = AsyncSqliteSaver(conn)
+    await _checkpointer.setup()
+    logger.info(f"✅ AsyncSqliteSaver 已初始化: {db_path}")
+
+
+async def close_checkpointer():
+    """关闭时调用"""
+    global _checkpointer
+    if _checkpointer and hasattr(_checkpointer, 'conn'):
+        await _checkpointer.conn.close()
+        logger.info("✅ AsyncSqliteSaver 已关闭")
+    _checkpointer = None
+
+
+def get_checkpointer():
     return _checkpointer
 
 

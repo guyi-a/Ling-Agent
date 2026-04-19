@@ -9,6 +9,7 @@ from .chat import router as chat_router
 from .workspace import router as workspace_router
 from .dev import router as dev_router
 from .preview import router as preview_router
+from .health import router as health_router
 
 __all__ = [
     "auth_router",
@@ -19,4 +20,5 @@ __all__ = [
     "workspace_router",
     "dev_router",
     "preview_router",
+    "health_router",
 ]

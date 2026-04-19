@@ -38,6 +38,9 @@ lxml>=5.3.0                # XML/HTML parser
 # Observability
 langfuse>=4.0.0            # LLM tracing & observability
 
+# LangGraph checkpoint persistence
+langgraph-checkpoint-sqlite>=2.0.0
+
 # Document processing (for read_document tool)
 PyMuPDF>=1.24.0            # PDF reading
 python-docx>=1.1.0         # Word reading

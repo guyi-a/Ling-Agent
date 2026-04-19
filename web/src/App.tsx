@@ -10,6 +10,8 @@ import SessionsPage from '@/pages/sessions/SessionsPage'
 import ProfilePage from '@/pages/profile/ProfilePage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import AppsPage from '@/pages/apps/AppsPage'
+import DiaryPage from '@/pages/diary/DiaryPage'
+import AssessmentPage from '@/pages/assessment/AssessmentPage'
 
 const queryClient = new QueryClient()
 
@@ -90,6 +92,22 @@ function App() {
             element={
               <PrivateRoute>
                 <AppsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/diary"
+            element={
+              <PrivateRoute>
+                <DiaryPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/assessment"
+            element={
+              <PrivateRoute>
+                <AssessmentPage />
               </PrivateRoute>
             }
           />

@@ -131,6 +131,166 @@
     }
   }
 
+  /*
+   * ─── 笔记本纸张纹理 ───
+   *
+   * 对齐原理：
+   *   行高 (--lh) = 32px
+   *   padding-top (--pt) = 24px — 页面顶部留白
+   *   横线间距 = 32px，第一条横线 = pt + lh（第一行文字底部）
+   *
+   *   background-position-y = pt + 1px
+   *   → 横线绘制在 (pt+1) + 31 = pt + 32 = 第一行文字底部 ✓
+   *   → 后续每 32px 重复，和 line-height 同步
+   *
+   *   效果：每行文字坐在两条横线之间，横线在文字下方当「下划线」
+   */
+  .notebook-page {
+    --lh: 32px;
+    --pt: 24px;
+    --line-color: #e8dcc8;
+    --paper-color: #fefcf3;
+    --margin-color: #f0b8b8;
+    /* 横线偏移：让文字居中在两条横线之间
+       行高32px，padding-top 24px
+       第一行文字中心 = 24 + 16 = 40
+       横线应在 24, 56, 88... 即行的边界
+       bgY + 31 = 24 → bgY = -7 → 用 25 (= 32 - 7) 等价 */
+    --bg-y: 25px;
+
+    background-color: var(--paper-color);
+    background-image:
+      repeating-linear-gradient(
+        var(--paper-color) 0px,
+        var(--paper-color) calc(var(--lh) - 1px),
+        var(--line-color) calc(var(--lh) - 1px),
+        var(--line-color) var(--lh)
+      );
+    background-size: 100% var(--lh);
+    background-attachment: local;
+    background-position-y: var(--bg-y);
+
+    padding-top: var(--pt);
+    line-height: var(--lh);
+    font-size: 14px;
+  }
+
+  .dark .notebook-page {
+    --paper-color: #1e1e24;
+    --line-color: #2a2a32;
+    --margin-color: #5a3a3a;
+  }
+
+  /* 左页：红色竖线在右侧 */
+  .notebook-left {
+    background-image:
+      linear-gradient(90deg, transparent calc(100% - 1px), var(--margin-color) calc(100% - 1px)),
+      repeating-linear-gradient(
+        var(--paper-color) 0px,
+        var(--paper-color) calc(var(--lh) - 1px),
+        var(--line-color) calc(var(--lh) - 1px),
+        var(--line-color) var(--lh)
+      );
+    background-position: 0 0, 0 var(--bg-y);
+    background-size: auto, 100% var(--lh);
+  }
+
+  /* 右页：红色竖线在左侧 */
+  .notebook-right {
+    background-image:
+      linear-gradient(90deg, var(--margin-color) 0px, var(--margin-color) 1px, transparent 1px),
+      repeating-linear-gradient(
+        var(--paper-color) 0px,
+        var(--paper-color) calc(var(--lh) - 1px),
+        var(--line-color) calc(var(--lh) - 1px),
+        var(--line-color) var(--lh)
+      );
+    background-position: 0 0, 0 var(--bg-y);
+    background-size: auto, 100% var(--lh);
+  }
+
+  /* 页内所有文字：统一 line-height */
+  .notebook-page p,
+  .notebook-page label,
+  .notebook-page h2,
+  .notebook-page span {
+    line-height: var(--lh);
+  }
+
+  .notebook-page textarea {
+    display: block;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    line-height: var(--lh);
+    padding: 0;
+    margin: 0;
+    resize: none;
+    box-sizing: border-box;
+  }
+
+  .notebook-page textarea:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .notebook-page textarea::placeholder {
+    line-height: var(--lh);
+  }
+
+  /* 书脊阴影 */
+  .book-spine {
+    background: linear-gradient(90deg,
+      rgba(0,0,0,0.06) 0%,
+      rgba(0,0,0,0.02) 30%,
+      rgba(0,0,0,0) 50%,
+      rgba(0,0,0,0.02) 70%,
+      rgba(0,0,0,0.06) 100%
+    );
+  }
+
+  .dark .book-spine {
+    background: linear-gradient(90deg,
+      rgba(0,0,0,0.2) 0%,
+      rgba(0,0,0,0.08) 30%,
+      rgba(0,0,0,0) 50%,
+      rgba(0,0,0,0.08) 70%,
+      rgba(0,0,0,0.2) 100%
+    );
+  }
+
+  /* 整本书的阴影 */
+  .notebook-shadow {
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.04),
+      0 8px 24px rgba(139, 115, 85, 0.12),
+      4px 14px 32px rgba(139, 115, 85, 0.1);
+  }
+
+  .dark .notebook-shadow {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  /* 日记卡片入场动画 */
+  .diary-card-enter {
+    animation: diaryCardIn 0.4s ease-out;
+  }
+
+  @keyframes diaryCardIn {
+    0% {
+      transform: translateY(12px) scale(0.97);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+  }
+
   /* 悬浮气泡背景装饰 */
   .floating-bubbles {
     position: absolute;

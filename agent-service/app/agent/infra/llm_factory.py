@@ -27,13 +27,13 @@ def get_llm() -> Optional[ChatOpenAI]:
     try:
         llm = ChatOpenAI(
             temperature=0.3,
-            max_tokens=8192,  # 通义千问最大支持32768，设置为8192性能更好
+            max_tokens=8192,
             timeout=None,
             max_retries=2,
             base_url=settings.LLM_BASE_URL,
             api_key=settings.DASHSCOPE_API_KEY,
             model=settings.LLM_MODEL,
-            stream_usage=True,  # 流式模式下也返回 token 用量（Langfuse 需要）
+            stream_usage=True,
         )
         logger.info(f"✓ LLM实例已创建 - model: {settings.LLM_MODEL}")
         return llm

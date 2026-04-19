@@ -22,6 +22,7 @@ from app.agent.tools.python_repl_tool import PythonReplTool
 from app.agent.tools.font_tool import InstallNotoSansSCTool
 from app.agent.tools.browser_tool import InstallBrowserUseTool, BrowserUseTool
 from app.agent.tools.dev_tool import DevRunTool, DevStopTool, DevRestartTool, DevLogsTool
+from app.agent.tools.health_tool import GetScaleQuestionsTool, GetHealthRecordsTool, GetAssessmentHistoryTool, SaveHealthRecordTool, SubmitAssessmentTool
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,11 @@ _dev_run_tool = DevRunTool()
 _dev_stop_tool = DevStopTool()
 _dev_restart_tool = DevRestartTool()
 _dev_logs_tool = DevLogsTool()
+_get_scale_questions_tool = GetScaleQuestionsTool()
+_get_health_records_tool = GetHealthRecordsTool()
+_get_assessment_history_tool = GetAssessmentHistoryTool()
+_save_health_record_tool = SaveHealthRecordTool()
+_submit_assessment_tool = SubmitAssessmentTool()
 
 
 def set_session_id(session_id: str) -> None:
@@ -53,6 +59,14 @@ def set_session_id(session_id: str) -> None:
     _dev_stop_tool.current_session_id = session_id
     _dev_restart_tool.current_session_id = session_id
     _dev_logs_tool.current_session_id = session_id
+
+
+def set_user_id(user_id: str) -> None:
+    """在每次对话前注入 user_id 到健康工具"""
+    _get_health_records_tool.current_user_id = user_id
+    _get_assessment_history_tool.current_user_id = user_id
+    _save_health_record_tool.current_user_id = user_id
+    _submit_assessment_tool.current_user_id = user_id
 
 
 def get_all_tools() -> List[BaseTool]:
@@ -83,6 +97,11 @@ def get_all_tools() -> List[BaseTool]:
         _dev_stop_tool,
         _dev_restart_tool,
         _dev_logs_tool,
+        _get_scale_questions_tool,
+        _get_health_records_tool,
+        _get_assessment_history_tool,
+        _save_health_record_tool,
+        _submit_assessment_tool,
     ]
 
     skill_tool = create_skill_tool()

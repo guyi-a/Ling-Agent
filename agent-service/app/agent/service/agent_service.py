@@ -13,7 +13,7 @@ from langgraph.types import Command
 
 from app.agent.infra.agent_factory import create_Ling_Agent, get_checkpointer
 from app.agent.infra.llm_factory import get_llm
-from app.agent.tools.registry import get_all_tools, set_session_id
+from app.agent.tools.registry import get_all_tools, set_session_id, set_user_id
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
 from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS
@@ -98,7 +98,7 @@ class AgentService:
             prompt_path = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)),
                 "prompts",
-                "core_prompt.md"
+                "psych_core_prompt.md" if settings.PROMPT_MODE == "psych" else "core_prompt.md"
             )
             
             if os.path.exists(prompt_path):
@@ -250,8 +250,12 @@ Always be concise and direct in your responses."""
             })
 
         # 添加历史消息（如果有），转换为多模态格式
+        # 排除最后一条 user 消息（即当前消息，会在后面单独添加并带 cache_control）
         if history:
-            for msg in history:
+            msgs_to_add = history
+            if msgs_to_add and msgs_to_add[-1].get("role") == "user":
+                msgs_to_add = msgs_to_add[:-1]
+            for msg in msgs_to_add:
                 messages.append(self._convert_to_multimodal_message(msg, session_id))
 
         # 在历史消息之后、当前用户消息之前注入动态上下文（时间等）
@@ -449,7 +453,8 @@ Always be concise and direct in your responses."""
         session_id: str,
         user_message: str,
         history: List[Dict[str, str]] = None,
-        attachments: List[Dict[str, Any]] = None
+        attachments: List[Dict[str, Any]] = None,
+        user_id: str = None,
     ):
         """
         真流式输出，支持 HumanInTheLoop interrupt/resume。
@@ -466,20 +471,22 @@ Always be concise and direct in your responses."""
         logger.info(f"🚀 会话 {session_id[:8]}... 开始执行")
 
         set_session_id(session_id)
+        if user_id:
+            set_user_id(user_id)
 
-        # 清空上一轮的 checkpoint 状态，避免消息累积导致缓存前缀不一致
-        # checkpoint 仅用于同一轮内的 interrupt/resume，跨轮不需要保留
+        # 每轮开始前清掉上一轮 checkpoint，避免 LangGraph 合并旧消息导致重复
         try:
             await get_checkpointer().adelete_thread(session_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"清理上轮 checkpoint: {e}")
 
+        # 每轮全量构建消息（system_prompt CC + last_user CC = 2 个标记，确保跨轮缓存命中）
         rendered_prompt = self._render_system_prompt(session_id)
         messages = self._build_messages(
             user_message, history, rendered_prompt,
-            session_id=session_id,
-            attachments=attachments
+            session_id=session_id, attachments=attachments
         )
+        logger.info(f"📦 消息构建完成: {len(messages)} 条 (session: {session_id[:8]}...)")
 
         # thread_id 用于 checkpointer 识别会话，每轮对话用 session_id
         # recursion_limit: 提高递归限制，支持复杂多步骤操作（如 browser-use）
@@ -571,9 +578,10 @@ Always be concise and direct in your responses."""
                                         details = {k: v for k, v in details.__dict__.items() if v is not None} if hasattr(details, "__dict__") else {}
                                     details = details or {}
                                 cache_read = details.get("cache_read", 0) or 0
+                                cache_creation = details.get("cache_creation", 0) or 0
                                 logger.info(
                                     f"📊 Token 用量 | input: {input_tokens}, output: {output_tokens}, "
-                                    f"cache_hit: {cache_read}"
+                                    f"cache_hit: {cache_read}, cache_creation: {cache_creation}"
                                 )
 
                         if tc_chunks:

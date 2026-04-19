@@ -188,6 +188,9 @@ agent-service/docs/
 # Agent workspace (user uploaded files and generated outputs)
 agent-service/workspace/
 
+# Agent data (checkpoints, runtime data)
+agent-service/data/
+
 # Deployed apps
 agent-service/deployed/
 

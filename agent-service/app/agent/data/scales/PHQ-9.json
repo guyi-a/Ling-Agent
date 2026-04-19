@@ -1,0 +1,71 @@
+{
+  "name": "PHQ-9",
+  "category": "抑郁",
+  "title": "患者健康问卷-9",
+  "description": "评估过去两周的抑郁症状，共9题",
+  "instruction": "在过去的两周里，以下问题困扰您的频率是？",
+  "questions": [
+    {"id": 1, "text": "做事时提不起劲或没有兴趣", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 2, "text": "感到心情低落、沮丧或绝望", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 3, "text": "入睡困难、睡不安稳或睡眠过多", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 4, "text": "感觉疲倦或没有活力", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 5, "text": "食欲不振或吃太多", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 6, "text": "觉得自己很糟——或觉得自己很失败，或让自己或家人失望", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 7, "text": "对事物专注有困难，例如阅读报纸或看电视时", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 8, "text": "动作或说话速度缓慢到别人已经察觉，或正好相反——烦躁不安、动来动去", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]},
+    {"id": 9, "text": "有不如死掉或用某种方式伤害自己的念头", "options": [
+      {"label": "完全不会", "score": 0},
+      {"label": "好几天", "score": 1},
+      {"label": "一半以上的天数", "score": 2},
+      {"label": "几乎每天", "score": 3}
+    ]}
+  ],
+  "scoring": {
+    "ranges": [
+      {"min": 0, "max": 4, "severity": "正常", "description": "没有或极少抑郁症状"},
+      {"min": 5, "max": 9, "severity": "轻度抑郁", "description": "存在轻度抑郁症状，建议关注情绪变化"},
+      {"min": 10, "max": 14, "severity": "中度抑郁", "description": "存在中度抑郁症状，建议寻求专业心理咨询"},
+      {"min": 15, "max": 27, "severity": "重度抑郁", "description": "存在重度抑郁症状，强烈建议尽快就医"}
+    ]
+  }
+}

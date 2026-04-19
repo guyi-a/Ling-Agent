@@ -1,22 +1,23 @@
-# 🤖 Ling-Agent
+# Ling-Agent
 
-> 功能完整、工程化的 AI Agent 生产力工具，支持流式对话、技能加载、Human-in-the-Loop 审批与工作区沙箱隔离
+> AI Agent 生产力工具，支持流式对话、技能加载、Human-in-the-Loop 审批、工作区沙箱隔离与心理健康支持
 
-## ✨ 核心特性
+## 核心特性
 
 ### 对话系统
-- **真流式输出** - 基于 SSE 的 token-level 流式响应
-- **多模态支持** - qwen-vl-max 模型，图像 + 文本输入
-- **多会话管理** - 会话列表、切换、历史持久化
-- **停止生成** - 实时取消，保存中断记录
-- **消息操作** - 复制、删除、重新生成、内联编辑
-- **文件附加** - 消息中直接引用工作区文件
+- **真流式输出** — 基于 SSE 的 token-level 流式响应
+- **多模态支持** — qwen-vl-max 模型，图像 + 文本输入
+- **多会话管理** — 会话列表、切换、置顶、历史持久化
+- **停止生成** — 实时取消，保存中断记录
+- **消息操作** — 复制、删除、重新生成、内联编辑
+- **文件附加** — 消息中直接引用工作区文件
+- **全局搜索** — 跨会话搜索历史消息
 
-### Skills 系统（9 个专业技能）
+### Skills 系统（12 个专业技能）
 
 | Skill | 功能 |
 |-------|------|
-| `data-analysis` | 数据分析、可视化图表（matplotlib） |
+| `data-analysis` | 数据分析、可视化图表 |
 | `data-cleaning` | 数据清洗与预处理 |
 | `news-enhance` | 实时新闻搜索增强 |
 | `report-generator` | 数据生成分析报告（PDF / PPTX） |
@@ -25,28 +26,46 @@
 | `browser-use` | 浏览器自动化（Chrome 控制） |
 | `file-organizer` | 智能文件整理（按类型 / 日期 / 项目分类） |
 | `pdf-enhance` | PDF 生成质量标准（中文字体、布局规范） |
+| `web-dev` | Web 应用开发（FastAPI + Tailwind + DaisyUI） |
+| `frontend-design` | 前端 UI 设计（Tailwind/DaisyUI/Alpine.js） |
+| `psych-counseling` | 心理健康支持与评估引导 |
 
-### 工具集成（10 个工具）
-- **文件操作** - `read_file`（支持 .docx/.pdf/.pptx）、`write_file`、`list_dir`
-- **代码执行** - `python_repl`（脚本持久化）、`run_command`
-- **网络能力** - `web_search`（DuckDuckGo）、`web_fetch`（SSRF 防护）
-- **浏览器控制** - `browser_use`、`install_browser_use`
-- **系统工具** - `install_noto_sans_sc`、`Skill`（技能加载器）
+### 工具集成（12 个工具）
+- **文件操作** — `read_file`（支持 .docx/.pdf/.pptx）、`write_file`、`edit_file`、`list_dir`
+- **代码执行** — `python_repl`（脚本持久化、编辑模式）、`run_command`
+- **网络能力** — `web_search`（DuckDuckGo）、`web_fetch`（SSRF 防护）
+- **浏览器控制** — `browser_use`、`install_browser_use`
+- **健康工具** — `save_health_record`、`get_health_records`、`get_assessment_history`、`get_scale_questions`、`submit_assessment`、`search_psych_knowledge`
+- **开发工具** — `dev_run`、`dev_logs`、`dev_stop`、`dev_restart`
+- **系统工具** — `install_noto_sans_sc`、`Skill`（技能加载器）
+
+### 心理健康模块
+- **心理日记** — 记录身体不适和情绪状态，支持趋势统计
+- **心理测评** — 7 个量表（GAD-7、PHQ-9、SDS、SAS、PSS-10、MBTI、SBTI），三种计分类型（severity / dimensions / multi_dimension）
+- **草稿保存** — 测评中途退出自动保存进度，下次可继续
+- **身心关联** — 对话中识别身体症状与心理状态的关联，主动引导记录
+- **危机干预** — 检测到严重心理危机时提供热线和资源
 
 ### Human-in-the-Loop 审批
 - 高危工具需人工审批：`run_command`、`python_repl`、`write_file`
 - LangGraph `interrupt` / `resume` 机制
 - 前端审批卡片（60 秒超时）
-- 审批拒绝后自动清理 checkpointer 状态
+
+### Web 应用开发
+- 在对话中构建完整 Web 应用（静态页面到全栈应用）
+- 前端：Tailwind CSS + DaisyUI + Alpine.js（CDN，无构建步骤）
+- 后端：FastAPI + SQLite
+- 后台进程管理（`dev_run` / `dev_logs` / `dev_stop`）
+- 工作区内 iframe 预览
 
 ### 安全机制
-- **工作区沙箱** - 文件操作限制在 `workspace/{session_id}/`
-- **SSRF 防护** - `web_fetch` 阻止访问内网地址
-- **路径验证** - 防止路径遍历攻击
-- **JWT 认证** - 会话隔离，防止越权访问
-- **超时控制** - Python 执行 60 秒超时
+- **工作区沙箱** — 文件操作限制在 `workspace/{session_id}/`
+- **SSRF 防护** — `web_fetch` 阻止访问内网地址
+- **路径验证** — 防止路径遍历攻击
+- **JWT 认证** — 会话隔离，防止越权访问
+- **超时控制** — Python 执行 60 秒超时
 
-## 🚀 快速开始
+## 快速开始
 
 ### 环境要求
 - Python 3.12+
@@ -56,8 +75,7 @@
 ### 安装
 
 ```bash
-# 克隆仓库
-git clone https://github.com/your-username/Ling-Agent.git
+git clone https://github.com/guyi-a/Ling-Agent.git
 cd Ling-Agent
 
 # 配置环境变量
@@ -78,7 +96,7 @@ cd web && npm install && cd ..
 ### 启动
 
 ```bash
-# 一键启动（推荐）
+# 一键启动
 ./start-dev.sh
 ```
 
@@ -98,7 +116,7 @@ cd web && npm run dev
 - **后端 API**: http://localhost:9000
 - **API 文档**: http://localhost:9000/docs
 
-## ⚙️ 环境变量
+## 环境变量
 
 `agent-service/.env`：
 
@@ -125,39 +143,12 @@ DEBUG=true
 LOG_LEVEL=INFO
 ```
 
-## 📖 使用示例
-
-**数据分析**
-```
-上传 sales.csv，帮我分析销售趋势并生成可视化报告
-```
-
-**文档转换**
-```
-将这份 Word 报告转换为 PPTX 演示文稿
-```
-
-**代码执行**
-```
-用 Python 计算斐波那契数列前 20 项并保存到 outputs/fib.txt
-```
-
-**图像理解**
-```
-[粘贴图表截图] 帮我提取这个图表中的数据并转为 CSV
-```
-
-**浏览器自动化**
-```
-打开 GitHub，搜索 LangGraph 并截图首页
-```
-
-## 🏗️ 技术架构
+## 技术架构
 
 ### 后端
 - **框架**: FastAPI + LangGraph + LangChain
 - **LLM**: 通义千问 qwen-vl-max（兼容 OpenAI API）
-- **数据库**: SQLite + SQLAlchemy（异步）
+- **数据库**: SQLite + SQLAlchemy（异步）+ Alembic 迁移
 - **认证**: JWT
 - **流式**: SSE (Server-Sent Events)
 - **状态管理**: LangGraph Checkpointer (InMemorySaver)
@@ -165,53 +156,51 @@ LOG_LEVEL=INFO
 ### 前端
 - **框架**: React 19 + TypeScript + Vite + Tailwind CSS
 - **状态管理**: Zustand
+- **数据查询**: TanStack Query
 - **流式处理**: EventSource (SSE)
 - **Markdown 渲染**: react-markdown + remark-gfm
 
-## 📂 项目结构
+## 项目结构
 
 ```
 Ling-Agent/
-├── agent-service/          # FastAPI 后端服务
+├── agent-service/              # FastAPI 后端服务
 │   ├── app/
 │   │   ├── agent/
-│   │   │   ├── infra/      # LLM 工厂、Agent 工厂
-│   │   │   ├── prompts/    # core_prompt.md 系统提示词
-│   │   │   ├── skills/     # 9 个专业技能
-│   │   │   ├── service/    # agent_service.py 核心服务
-│   │   │   └── tools/      # 10 个工具
-│   │   ├── core/           # 配置、依赖注入、审批逻辑
-│   │   ├── crud/           # 数据库 CRUD
-│   │   ├── models/         # SQLAlchemy 模型
-│   │   ├── routers/        # API 路由
-│   │   └── schemas/        # Pydantic 模型
-│   ├── workspace/          # 运行时工作区（每个 session 一个目录）
-│   ├── main.py
-│   └── requirements.txt
-├── web/                    # React 前端
+│   │   │   ├── data/scales/    # 心理量表数据（GAD-7, PHQ-9, MBTI 等）
+│   │   │   ├── infra/          # LLM 工厂、Agent 工厂
+│   │   │   ├── prompts/        # 系统提示词（通用版 + 心理健康版）
+│   │   │   ├── skills/         # 12 个专业技能
+│   │   │   ├── service/        # agent_service.py 核心服务
+│   │   │   └── tools/          # 工具集（文件、代码、网络、健康、开发）
+│   │   ├── core/               # 配置、依赖注入、审批逻辑
+│   │   ├── crud/               # 数据库 CRUD
+│   │   ├── models/             # SQLAlchemy 模型
+│   │   ├── routers/            # API 路由
+│   │   └── schemas/            # Pydantic 模型
+│   ├── alembic/                # 数据库迁移
+│   ├── workspace/              # 运行时工作区（每个 session 一个目录）
+│   └── main.py
+├── web/                        # React 前端
 │   └── src/
-│       ├── api/            # API 客户端
-│       ├── components/     # React 组件
-│       ├── hooks/          # useSSEChat.ts
-│       ├── pages/          # LoginPage / ChatPage / SessionsPage
-│       ├── stores/         # Zustand（authStore）
-│       └── types/          # TypeScript 类型定义
+│       ├── api/                # API 客户端
+│       ├── components/         # React 组件
+│       ├── hooks/              # useSSEChat 等
+│       ├── pages/              # 页面
+│       │   ├── chat/           # 对话主页
+│       │   ├── sessions/       # 会话管理
+│       │   ├── assessment/     # 心理测评
+│       │   ├── diary/          # 心理日记
+│       │   ├── apps/           # 应用管理
+│       │   ├── profile/        # 用户资料
+│       │   └── settings/       # 设置
+│       ├── stores/             # Zustand（auth, theme）
+│       └── types/              # TypeScript 类型
 ├── start-dev.sh
 └── README.md
 ```
 
-工作区结构（运行时生成）：
-```
-workspace/{session_id}/
-├── uploads/        # 用户上传文件
-└── outputs/
-    ├── scripts/    # Python 脚本历史
-    ├── *.png       # 生成的图表
-    ├── *.pdf       # 生成的报告
-    └── *.pptx      # 生成的演示文稿
-```
-
-## 📡 核心 API
+## 核心 API
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
@@ -220,36 +209,19 @@ workspace/{session_id}/
 | `POST` | `/api/chat/stream` | SSE 流式聊天 |
 | `POST` | `/api/chat/approve` | 工具审批 |
 | `POST` | `/api/chat/{session_id}/stop` | 停止生成 |
-| `GET` | `/api/messages/session/{session_id}/history` | 获取历史 |
+| `GET` | `/api/messages/session/{session_id}/history` | 获取历史消息 |
 | `DELETE` | `/api/messages/{message_id}` | 删除消息 |
 | `GET` | `/api/sessions/` | 会话列表 |
+| `PATCH` | `/api/sessions/{session_id}` | 更新会话（标题、置顶） |
 | `POST` | `/api/workspace/{session_id}/upload` | 上传文件 |
 | `GET` | `/api/workspace/{session_id}/files` | 列出文件 |
+| `GET` | `/api/health/scales` | 获取量表列表 |
+| `GET` | `/api/health/scales/{name}` | 获取量表题目 |
+| `POST` | `/api/health/assessments` | 提交测评 |
+| `GET` | `/api/health/assessments` | 测评历史 |
+| `POST` | `/api/health/records` | 保存健康日记 |
+| `GET` | `/api/health/records` | 获取健康日记 |
 
-## 🛣️ Roadmap
-
-- [ ] Redis 替代 InMemorySaver（支持多进程 / 分布式）
-- [ ] Docker 容器化部署
-- [ ] 单元测试与 CI/CD
-- [ ] 多 Agent 协作
-- [ ] 更多 Skills（代码审查、单元测试生成）
-- [ ] 移动端响应式优化
-
-## 🤝 Contributing
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交修改 (`git commit -m 'feat: add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 开启 Pull Request
-
-## 📄 License
+## License
 
 MIT License - 详见 [LICENSE](LICENSE)
-
-## 🙏 致谢
-
-- [LangChain](https://github.com/langchain-ai/langchain)
-- [LangGraph](https://github.com/langchain-ai/langgraph)
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [通义千问](https://dashscope.aliyun.com/)

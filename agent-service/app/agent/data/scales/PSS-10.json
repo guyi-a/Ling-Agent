@@ -1,0 +1,56 @@
+{
+  "name": "PSS-10",
+  "category": "压力",
+  "title": "压力感知量表-10",
+  "description": "评估过去一个月的压力感知程度，共10题",
+  "instruction": "在过去的一个月里，以下情况发生的频率是？",
+  "questions": [
+    {"id": 1, "text": "因为发生了意想不到的事情而感到心烦意乱", "options": [
+      {"label": "从不", "score": 0}, {"label": "偶尔", "score": 1},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 3}, {"label": "总是", "score": 4}
+    ]},
+    {"id": 2, "text": "感觉无法控制生活中重要的事情", "options": [
+      {"label": "从不", "score": 0}, {"label": "偶尔", "score": 1},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 3}, {"label": "总是", "score": 4}
+    ]},
+    {"id": 3, "text": "感到紧张和压力", "options": [
+      {"label": "从不", "score": 0}, {"label": "偶尔", "score": 1},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 3}, {"label": "总是", "score": 4}
+    ]},
+    {"id": 4, "text": "成功地处理了日常生活中的烦心事", "options": [
+      {"label": "从不", "score": 4}, {"label": "偶尔", "score": 3},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 1}, {"label": "总是", "score": 0}
+    ]},
+    {"id": 5, "text": "感觉自己有效地应对了生活中的重大变化", "options": [
+      {"label": "从不", "score": 4}, {"label": "偶尔", "score": 3},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 1}, {"label": "总是", "score": 0}
+    ]},
+    {"id": 6, "text": "对自己处理个人问题的能力有信心", "options": [
+      {"label": "从不", "score": 4}, {"label": "偶尔", "score": 3},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 1}, {"label": "总是", "score": 0}
+    ]},
+    {"id": 7, "text": "感觉事情进展顺利", "options": [
+      {"label": "从不", "score": 4}, {"label": "偶尔", "score": 3},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 1}, {"label": "总是", "score": 0}
+    ]},
+    {"id": 8, "text": "发现自己无法处理所有必须做的事情", "options": [
+      {"label": "从不", "score": 0}, {"label": "偶尔", "score": 1},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 3}, {"label": "总是", "score": 4}
+    ]},
+    {"id": 9, "text": "能够控制生活中的烦躁情绪", "options": [
+      {"label": "从不", "score": 4}, {"label": "偶尔", "score": 3},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 1}, {"label": "总是", "score": 0}
+    ]},
+    {"id": 10, "text": "感觉困难积累得太多而无法克服", "options": [
+      {"label": "从不", "score": 0}, {"label": "偶尔", "score": 1},
+      {"label": "有时", "score": 2}, {"label": "经常", "score": 3}, {"label": "总是", "score": 4}
+    ]}
+  ],
+  "scoring": {
+    "ranges": [
+      {"min": 0, "max": 13, "severity": "压力较低", "description": "压力水平较低，状态良好"},
+      {"min": 14, "max": 26, "severity": "中等压力", "description": "存在一定压力，建议适当放松和调节"},
+      {"min": 27, "max": 40, "severity": "压力较高", "description": "压力水平较高，建议寻求支持和帮助"}
+    ]
+  }
+}

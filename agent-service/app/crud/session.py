@@ -110,7 +110,8 @@ class SessionCRUD:
     ) -> Optional[Session]:
         """更新会话"""
         update_data = session_update.model_dump(exclude_unset=True)
-        update_data["updated_at"] = datetime.utcnow()
+        if "is_pinned" not in update_data or len(update_data) > 1:
+            update_data["updated_at"] = datetime.utcnow()
         
         await db.execute(
             update(Session)
