@@ -18,7 +18,6 @@ from app.schemas.health import HealthRecordCreate, AssessmentSubmit
 logger = logging.getLogger(__name__)
 
 SCALES_DIR = Path(__file__).parent.parent / "agent" / "data" / "scales"
-SCALES_DRAFT_DIR = Path(__file__).parent.parent / "agent" / "data" / "scales_draft"
 
 
 class HealthRecordCRUD:
@@ -128,8 +127,8 @@ class HealthRecordCRUD:
 
 
 def _load_scale_data(scale_type: str) -> Optional[dict]:
-    """从 scales/ 或 scales_draft/ 目录加载量表 JSON"""
-    for d in (SCALES_DIR, SCALES_DRAFT_DIR):
+    """从 scales/ 目录加载量表 JSON"""
+    for d in (SCALES_DIR,):
         f = d / f"{scale_type}.json"
         if f.exists():
             try:
