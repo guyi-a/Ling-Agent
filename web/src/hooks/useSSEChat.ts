@@ -18,6 +18,7 @@ export interface Message {
   role: 'user' | 'assistant'
   parts: MessagePart[]  // 按时间顺序的内容片段
   isStreaming?: boolean
+  isCompacting?: boolean
   approvalRequest?: {
     requestId: string
     toolName: string
@@ -251,6 +252,22 @@ export function useSSEChat() {
             )
             reader?.cancel()
             return  // 终止事件，立即退出
+          } else if (event === 'compacting') {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === aiMessageId
+                  ? { ...msg, isCompacting: true }
+                  : msg
+              )
+            )
+          } else if (event === 'compacting_done') {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === aiMessageId
+                  ? { ...msg, isCompacting: false }
+                  : msg
+              )
+            )
           } else if (event === 'done') {
             setMessages((prev) =>
               prev.map((msg) =>
@@ -316,6 +333,11 @@ export function useSSEChat() {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
+
+    // 清除所有消息的 isStreaming 状态
+    setMessages(prev =>
+      prev.map(msg => msg.isStreaming ? { ...msg, isStreaming: false } : msg)
+    )
     setIsStreaming(false)
   }, [currentSessionId, token])
 
@@ -371,7 +393,11 @@ export function useSSEChat() {
         await processSSEStream(response, aiMessageId, { userMessage })
       } catch (error: any) {
         if (error.name === 'AbortError') {
-          console.log('Stream aborted')
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === aiMessageId ? { ...msg, isStreaming: false } : msg
+            )
+          )
         } else {
           console.error('Stream error:', error)
           setMessages((prev) =>

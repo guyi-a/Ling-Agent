@@ -7,7 +7,7 @@ echo ""
 echo "📡 启动后端服务 (端口 9000)..."
 cd agent-service
 source venv/bin/activate 2>/dev/null || true
-uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload &
+uvicorn main:app --host 0.0.0.0 --port 9000 --reload &
 BACKEND_PID=$!
 cd ..
 

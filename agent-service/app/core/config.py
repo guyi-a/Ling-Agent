@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Memory Configuration
     MEMORY_MAX_TOKENS: int = 2000
+    MEMORY_DIR: str = "data/memories"
 
     # Application
     PORT: int = 9000
@@ -40,6 +41,13 @@ class Settings(BaseSettings):
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+
+    # Context Compaction
+    COMPACT_ENABLED: bool = True
+    COMPACT_TOKEN_THRESHOLD: int = 30000
+    COMPACT_KEEP_TURNS: int = 2
+    COMPACT_MODEL: str = "qwen-turbo"
+    COMPACT_SUMMARY_MAX_TOKENS: int = 1500
 
     # JWT Configuration
     JWT_SECRET_KEY: str = "change-this-secret-key-in-production"

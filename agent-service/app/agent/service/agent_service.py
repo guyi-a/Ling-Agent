@@ -216,7 +216,8 @@ Always be concise and direct in your responses."""
         history: List[Dict[str, str]] = None,
         system_prompt: str = None,
         session_id: str = None,
-        attachments: List[Dict[str, Any]] = None
+        attachments: List[Dict[str, Any]] = None,
+        user_id: str = None,
     ) -> List[Dict[str, Any]]:
         """
         构建消息列表（支持多模态）
@@ -262,6 +263,13 @@ Always be concise and direct in your responses."""
         # 放在缓存前缀之外，不影响缓存命中
         now = datetime.now(ZoneInfo("Asia/Shanghai"))
         dynamic_context = f"[System Context] Current time: {now.strftime('%Y-%m-%d %H:%M')} (Asia/Shanghai)"
+
+        if user_id:
+            from app.agent.tools.memory_tool import load_user_memory
+            memory_text = load_user_memory(user_id)
+            if memory_text:
+                dynamic_context += f"\n\n[User Memory]\n{memory_text}"
+
         messages.append({"role": "system", "content": dynamic_context})
 
         # 添加当前用户消息（支持附件）
@@ -474,6 +482,8 @@ Always be concise and direct in your responses."""
         if user_id:
             set_user_id(user_id)
 
+        last_input_tokens = 0
+
         # 每轮开始前清掉上一轮 checkpoint，避免 LangGraph 合并旧消息导致重复
         try:
             await get_checkpointer().adelete_thread(session_id)
@@ -484,7 +494,8 @@ Always be concise and direct in your responses."""
         rendered_prompt = self._render_system_prompt(session_id)
         messages = self._build_messages(
             user_message, history, rendered_prompt,
-            session_id=session_id, attachments=attachments
+            session_id=session_id, attachments=attachments,
+            user_id=user_id,
         )
         logger.info(f"📦 消息构建完成: {len(messages)} 条 (session: {session_id[:8]}...)")
 
@@ -579,6 +590,7 @@ Always be concise and direct in your responses."""
                                     details = details or {}
                                 cache_read = details.get("cache_read", 0) or 0
                                 cache_creation = details.get("cache_creation", 0) or 0
+                                last_input_tokens = input_tokens
                                 logger.info(
                                     f"📊 Token 用量 | input: {input_tokens}, output: {output_tokens}, "
                                     f"cache_hit: {cache_read}, cache_creation: {cache_creation}"
@@ -615,7 +627,11 @@ Always be concise and direct in your responses."""
                     elif kind == "on_tool_end":
                         tool_name = event.get("name", "tool")
                         output = event.get("data", {}).get("output")
-                        result_text = str(output) if output is not None else ""
+                        content = getattr(output, "content", output)
+                        if isinstance(content, (list, dict)):
+                            result_text = json.dumps(content, ensure_ascii=False)
+                        else:
+                            result_text = str(content) if content is not None else ""
                         tool_call_id = executed_ids.pop(0) if executed_ids else ""
                         if tool_call_id:
                             await self._save_tool_message(db, session_id, tool_name, result_text, tool_call_id)
@@ -698,6 +714,18 @@ Always be concise and direct in your responses."""
             assistant_message_id = None
             if full_response:
                 assistant_message_id = await self._save_assistant_message(db, session_id, full_response)
+
+            # 压缩检查
+            if last_input_tokens > 0:
+                from app.agent.compaction import should_compact, maybe_compact
+                logger.info(f"🗜️ 压缩判断 | last_input_tokens={last_input_tokens}, threshold={settings.COMPACT_TOKEN_THRESHOLD}, enabled={settings.COMPACT_ENABLED}")
+                if should_compact(last_input_tokens, settings.COMPACT_TOKEN_THRESHOLD, settings.COMPACT_ENABLED):
+                    yield {"type": "compacting"}
+                    try:
+                        await maybe_compact(db, session_id, last_input_tokens)
+                    except Exception as e:
+                        logger.warning(f"压缩失败，跳过: {e}")
+                    yield {"type": "compacting_done"}
 
         except asyncio.CancelledError:
             logger.info(f"⛔ 会话 {session_id[:8]}... 被用户停止")

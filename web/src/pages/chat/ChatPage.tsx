@@ -53,8 +53,15 @@ function guessLang(key: string, value: string): string {
 // 清理工具输出：提取 ToolMessage 序列化中的 content，替换 \n 为真实换行
 function cleanToolOutput(raw: string): string {
   let s = raw
-  const m = s.match(/^content=["']([\s\S]*?)["']\s*(?:name=|tool_call_id=|$)/)
-  if (m) s = m[1]
+  const contentPrefix = s.match(/^content=["']/)
+  if (contentPrefix) {
+    const quote = s[8]
+    const tailMatch = s.match(/\s+(?:name=|tool_call_id=)/)
+    if (tailMatch && tailMatch.index) {
+      s = s.slice(9, tailMatch.index)
+      if (s.endsWith(quote)) s = s.slice(0, -1)
+    }
+  }
   s = s.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
   return s.trim()
 }
@@ -894,15 +901,33 @@ export default function ChatPage() {
                                         </div>
                                       )}
                                       {part.toolOutput && (() => {
-                                        const cleaned = cleanToolOutput(part.toolOutput.length > 500 ? part.toolOutput.slice(0, 500) + '...' : part.toolOutput)
+                                        const cleaned = cleanToolOutput(part.toolOutput)
+                                        const display = cleaned.length > 800 ? cleaned.slice(0, 800) + '...' : cleaned
                                         let parsed: any = null
                                         try { parsed = JSON.parse(cleaned) } catch {}
-                                        const isJson = parsed !== null && typeof parsed === 'object'
+                                        const isArray = Array.isArray(parsed)
+                                        const isObj = parsed !== null && typeof parsed === 'object' && !isArray
                                         return (
                                           <div>
                                             <div className="text-gray-400 dark:text-gray-500 mb-1 font-medium">输出</div>
-                                            <div className="max-h-40 overflow-auto rounded">
-                                              {isJson ? (
+                                            <div className="max-h-60 overflow-auto rounded">
+                                              {isArray ? (
+                                                <div className="space-y-1.5">
+                                                  {parsed.map((item: any, i: number) => (
+                                                    <div key={i} className="border border-gray-200 dark:border-gray-600 rounded p-2 text-xs">
+                                                      {item.title && <div className="font-medium text-gray-800 dark:text-gray-200 truncate">{item.title}</div>}
+                                                      {item.body && <div className="text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{item.body}</div>}
+                                                      {(item.href || item.url) && (
+                                                        <a href={item.href || item.url} target="_blank" rel="noopener noreferrer"
+                                                          className="text-blue-500 hover:underline truncate block mt-0.5">
+                                                          {item.href || item.url}
+                                                        </a>
+                                                      )}
+                                                      {item.date && <div className="text-gray-400 dark:text-gray-500 mt-0.5">{item.source ? `${item.source} · ` : ''}{item.date}</div>}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : isObj ? (
                                                 <ToolInputDisplay data={parsed} isDark={isDark} />
                                               ) : (
                                                 <SyntaxHighlighter
@@ -910,7 +935,7 @@ export default function ChatPage() {
                                                   language="text"
                                                   customStyle={{ margin: 0, fontSize: '0.75rem', borderRadius: '0.375rem' }}
                                                 >
-                                                  {cleaned}
+                                                  {display}
                                                 </SyntaxHighlighter>
                                               )}
                                             </div>
@@ -951,6 +976,12 @@ export default function ChatPage() {
                           <div className="flex items-center gap-2 mt-2 text-gray-500 dark:text-gray-400">
                             <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
                             <span className="text-sm">AI 正在思考...</span>
+                          </div>
+                        )}
+                        {msg.isCompacting && (
+                          <div className="flex items-center gap-2 mt-3 text-gray-500 dark:text-gray-400">
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                            <span className="text-sm">正在整理对话上下文...</span>
                           </div>
                         )}
 

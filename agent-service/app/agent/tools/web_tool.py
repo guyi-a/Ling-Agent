@@ -78,8 +78,12 @@ class _WebFetchInput(BaseModel):
 class _WebSearchInput(BaseModel):
     query: str = Field(description="搜索关键词")
     search_type: str = Field(default="text", description="搜索类型：text=常规搜索，news=新闻搜索")
-    max_results: int = Field(default=5, description="返回结果数量，最多 10")
+    max_results: int = Field(default=10, description="返回结果数量，最多 10")
     timelimit: str = Field(default=None, description="时间过滤（仅新闻搜索）：d=天，w=周，m=月，y=年")
+    region: str = Field(default="cn-zh", description="搜索地区，如 cn-zh（中文）、us-en（英文）")
+    safesearch: str = Field(default="moderate", description="安全搜索：on / moderate / off")
+    allowed_domains: list = Field(default=None, description="只返回这些域名的结果，如 ['zhihu.com']")
+    blocked_domains: list = Field(default=None, description="排除这些域名的结果")
 
 
 class WebFetchTool(BaseTool):
@@ -244,19 +248,52 @@ class WebFetchTool(BaseTool):
             return f"Unexpected error fetching '{url}': {e}"
 
 
+def _is_safe_url(url: str) -> bool:
+    try:
+        return urlparse(url).scheme in ("http", "https")
+    except Exception:
+        return False
+
+
+def _matches_domain(url: str, domain: str) -> bool:
+    try:
+        hostname = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    domain = domain.lower().strip()
+    if domain.startswith("*."):
+        suffix = domain[2:]
+        return hostname == suffix or hostname.endswith("." + suffix)
+    return hostname == domain or hostname.endswith("." + domain)
+
+
+def _filter_by_domains(results: list, url_key: str, allowed: list, blocked: list) -> list:
+    out = []
+    for r in results:
+        url = r.get(url_key, "")
+        if not _is_safe_url(url):
+            continue
+        if blocked and any(_matches_domain(url, d) for d in blocked):
+            continue
+        if allowed and not any(_matches_domain(url, d) for d in allowed):
+            continue
+        out.append(r)
+    return out
+
+
 class WebSearchTool(BaseTool):
     """DuckDuckGo 搜索工具（支持常规搜索和新闻搜索）"""
     name: str = "web_search"
     description: str = (
-        "Search the web using DuckDuckGo. Supports both text (regular web) and news search.\n"
+        "Search the web using DuckDuckGo.\n"
         "Parameters:\n"
         "- query: Search keywords (required)\n"
-        "- search_type: 'text' for regular search (default), 'news' for news articles\n"
-        "- max_results: Number of results (default 5, max 10)\n"
-        "- timelimit: Time filter for news (d=day, w=week, m=month, y=year)\n"
-        "Examples:\n"
-        "- Regular: web_search('Python best practices')\n"
-        "- News: web_search('AI technology', search_type='news', timelimit='w')"
+        "- search_type: 'text' (default) or 'news'\n"
+        "- max_results: Number of results (default 10, max 10)\n"
+        "- region: Region code, e.g. 'cn-zh' (default), 'us-en'\n"
+        "- timelimit: Time filter for news: d=day, w=week, m=month\n"
+        "- allowed_domains: Only return results from these domains\n"
+        "- blocked_domains: Exclude results from these domains"
     )
     args_schema: Type[BaseModel] = _WebSearchInput
 
@@ -264,95 +301,88 @@ class WebSearchTool(BaseTool):
         self,
         query: str,
         search_type: str = "text",
-        max_results: int = 5,
-        timelimit: str = None
-    ) -> str:
+        max_results: int = 10,
+        timelimit: str = None,
+        region: str = "cn-zh",
+        safesearch: str = "moderate",
+        allowed_domains: list = None,
+        blocked_domains: list = None,
+    ) -> list:
+        import functools
+        import anyio.from_thread
+        from ddgs import DDGS
+
+        max_results = min(max(1, max_results), 10)
+        logger.info(f"🔍 DuckDuckGo search: '{query}' (type={search_type}, region={region})")
+
         try:
-            from ddgs import DDGS
-
-            max_results = min(max_results, 10)
-
-            logger.info(f"🔍 DuckDuckGo search: '{query}' (type={search_type}, limit={timelimit})")
-
             with DDGS() as ddgs:
+                kwargs = {"max_results": max_results, "safesearch": safesearch}
+                if region:
+                    kwargs["region"] = region
+
                 if search_type == "news":
-                    return self._search_news(ddgs, query, max_results, timelimit)
+                    if timelimit:
+                        kwargs["timelimit"] = timelimit
+                    raw = list(ddgs.news(query, **kwargs))
+                    raw.sort(key=lambda x: x.get("date") or "", reverse=True)
+                    url_key = "url"
                 else:
-                    return self._search_text(ddgs, query, max_results)
+                    raw = list(ddgs.text(query, **kwargs))
+                    url_key = "href"
+
+            results = _filter_by_domains(raw, url_key, allowed_domains, blocked_domains)
+            logger.info(f"✅ 找到 {len(results)} 条结果")
+            return results
 
         except Exception as e:
             logger.error(f"web_search 失败: {e}")
-            return (
-                f"⚠️ 搜索失败: {e}\n\n"
-                f"💡 建议：\n"
-                f"1. 检查网络连接\n"
-                f"2. 或使用 browser-use 技能进行搜索：\n"
-                f"   - Skill(command='browser-use')\n"
-                f"   - browser_use('open https://www.google.com')\n"
-                f"   - 搜索 '{query}'"
-            )
-
-    def _search_text(self, ddgs, query: str, max_results: int) -> str:
-        """常规网页搜索"""
-        try:
-            results = list(ddgs.text(query, max_results=max_results))
-
-            if not results:
-                return f"未找到搜索结果：{query}"
-
-            formatted = []
-            for r in results:
-                formatted.append(
-                    f"**{r['title']}**\n"
-                    f"{r['body']}\n"
-                    f"链接: {r['href']}"
-                )
-
-            logger.info(f"✅ 找到 {len(results)} 条搜索结果")
-            return f"搜索结果 '{query}'：\n\n" + "\n\n".join(formatted)
-
-        except Exception as e:
-            logger.error(f"Text search failed: {e}")
-            return f"文本搜索失败: {e}"
-
-    def _search_news(self, ddgs, query: str, max_results: int, timelimit: str = None) -> str:
-        """新闻搜索"""
-        try:
-            kwargs = {'max_results': max_results}
-            if timelimit:
-                kwargs['timelimit'] = timelimit
-
-            results = list(ddgs.news(query, **kwargs))
-
-            if not results:
-                return f"未找到新闻结果：{query}"
-
-            # 按日期排序（最新的在前）
-            results.sort(key=lambda x: x.get('date') or '', reverse=True)
-
-            formatted = []
-            for r in results:
-                date_str = f" ({r['date']})" if r.get('date') else ""
-                source_str = f" - {r['source']}" if r.get('source') else ""
-
-                formatted.append(
-                    f"**{r['title']}**{date_str}{source_str}\n"
-                    f"{r['body']}\n"
-                    f"链接: {r['url']}"
-                )
-
-            logger.info(f"📰 找到 {len(results)} 条新闻结果")
-            return f"新闻搜索 '{query}'：\n\n" + "\n\n".join(formatted)
-
-        except Exception as e:
-            logger.error(f"News search failed: {e}")
-            return f"新闻搜索失败: {e}"
+            return []
 
     async def _arun(
         self,
         query: str,
         search_type: str = "text",
-        max_results: int = 5,
-        timelimit: str = None
-    ) -> str:
-        return self._run(query, search_type, max_results, timelimit)
+        max_results: int = 10,
+        timelimit: str = None,
+        region: str = "cn-zh",
+        safesearch: str = "moderate",
+        allowed_domains: list = None,
+        blocked_domains: list = None,
+    ) -> list:
+        import functools
+        import anyio.to_thread
+
+        max_results = min(max(1, max_results), 10)
+        logger.info(f"🔍 DuckDuckGo search: '{query}' (type={search_type}, region={region})")
+
+        try:
+            from ddgs import DDGS
+
+            with DDGS() as ddgs:
+                kwargs = {"max_results": max_results, "safesearch": safesearch}
+                if region:
+                    kwargs["region"] = region
+
+                if search_type == "news":
+                    if timelimit:
+                        kwargs["timelimit"] = timelimit
+                    search_fn = functools.partial(ddgs.news, query, **kwargs)
+                else:
+                    search_fn = functools.partial(ddgs.text, query, **kwargs)
+
+                raw = list(await anyio.to_thread.run_sync(search_fn))
+
+            if search_type == "news":
+                raw.sort(key=lambda x: x.get("date") or "", reverse=True)
+                url_key = "url"
+            else:
+                url_key = "href"
+
+            results = _filter_by_domains(raw, url_key, allowed_domains, blocked_domains)
+            logger.info(f"✅ 找到 {len(results)} 条结果")
+            return results
+
+        except Exception as e:
+            logger.error(f"web_search 失败: {e}")
+            return []

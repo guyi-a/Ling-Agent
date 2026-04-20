@@ -2,7 +2,7 @@
 Message CRUD 操作
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from typing import Optional, List, Dict
 from datetime import datetime
 import uuid
@@ -97,15 +97,15 @@ class MessageCRUD:
         self,
         db: AsyncSession,
         session_id: str,
-        count: int = 10
+        count: int = 10,
+        active_only: bool = False,
     ) -> List[Message]:
-        """获取会话最新的 N 条消息"""
-        result = await db.execute(
-            select(Message)
-            .where(Message.session_id == session_id)
-            .order_by(Message.created_at.desc())
-            .limit(count)
-        )
+        """获取会话最新的 N 条消息。active_only=True 时只返回未压缩的。"""
+        query = select(Message).where(Message.session_id == session_id)
+        if active_only:
+            query = query.where(Message.compacted_at.is_(None))
+        query = query.order_by(Message.created_at.desc()).limit(count)
+        result = await db.execute(query)
         messages = result.scalars().all()
         return list(reversed(messages))
 
@@ -122,7 +122,7 @@ class MessageCRUD:
         - tool 消息重建为带 tool_call_id 字段的消息
         - 过滤孤儿 assistant[tool_calls]（审批拒绝时没有对应 tool 消息）
         """
-        messages = await self.get_latest_messages(db, session_id, limit)
+        messages = await self.get_latest_messages(db, session_id, limit, active_only=True)
 
         result = []
         for msg in messages:
@@ -146,9 +146,10 @@ class MessageCRUD:
                     "content": msg.content,
                     "tool_call_id": tool_call_id,
                     "name": tool_name,
+                    "_message_id": msg.message_id,
                 })
             elif msg.role == "assistant":
-                entry: Dict = {"role": "assistant", "content": msg.content}
+                entry: Dict = {"role": "assistant", "content": msg.content, "_message_id": msg.message_id}
                 tool_calls = extra.get("tool_calls")
                 if tool_calls:
                     entry["tool_calls"] = [
@@ -164,7 +165,7 @@ class MessageCRUD:
                     ]
                 result.append(entry)
             else:
-                result.append({"role": msg.role, "content": msg.content})
+                result.append({"role": msg.role, "content": msg.content, "_message_id": msg.message_id})
 
         # 移除孤儿 assistant[tool_calls]（审批被拒绝时没有对应 tool 消息）
         result = _drop_orphan_tool_calls(result)
@@ -275,6 +276,82 @@ class MessageCRUD:
             }
             for msg, title in rows
         ]
+
+    async def get_all_active_messages(
+        self,
+        db: AsyncSession,
+        session_id: str,
+    ) -> List[dict]:
+        """获取会话所有未压缩消息（无 limit），供 compactor 使用。"""
+        query = (
+            select(Message)
+            .where(Message.session_id == session_id, Message.compacted_at.is_(None))
+            .order_by(Message.created_at.asc())
+        )
+        result = await db.execute(query)
+        messages = result.scalars().all()
+
+        out = []
+        for msg in messages:
+            extra = {}
+            if msg.extra_data:
+                try:
+                    extra = json.loads(msg.extra_data)
+                except Exception:
+                    pass
+
+            if msg.role == "tool":
+                tool_call_id = extra.get("tool_call_id", "")
+                tool_name = extra.get("tool_name", "unknown")
+                if not tool_call_id:
+                    continue
+                if not out or out[-1].get("role") != "assistant" or not out[-1].get("tool_calls"):
+                    continue
+                out.append({
+                    "role": "tool",
+                    "content": msg.content,
+                    "tool_call_id": tool_call_id,
+                    "name": tool_name,
+                    "_message_id": msg.message_id,
+                })
+            elif msg.role == "assistant":
+                entry: Dict = {"role": "assistant", "content": msg.content, "_message_id": msg.message_id}
+                tool_calls = extra.get("tool_calls")
+                if tool_calls:
+                    entry["tool_calls"] = [
+                        {
+                            "id": tc.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": tc.get("name", ""),
+                                "arguments": json.dumps(tc.get("args", {})),
+                            }
+                        }
+                        for tc in tool_calls
+                    ]
+                out.append(entry)
+            else:
+                out.append({"role": msg.role, "content": msg.content, "_message_id": msg.message_id})
+
+        out = _drop_orphan_tool_calls(out)
+        return out
+
+    async def mark_messages_compacted(
+        self,
+        db: AsyncSession,
+        message_ids: List[str],
+        group_id: str,
+    ) -> int:
+        """批量标记消息为已压缩。"""
+        if not message_ids:
+            return 0
+        result = await db.execute(
+            update(Message)
+            .where(Message.message_id.in_(message_ids))
+            .values(compacted_at=datetime.utcnow(), compact_group_id=group_id)
+        )
+        await db.commit()
+        return result.rowcount
 
     async def delete_after_timestamp(
         self,

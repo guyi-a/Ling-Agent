@@ -121,7 +121,7 @@ async def _prepare_session(request: ChatRequest, current_user: User, db: AsyncSe
         content=request.message,
         extra_data=extra_data if extra_data else None
     ))
-    history = await message_crud.get_conversation_history(db, session.session_id, limit=20)
+    history = await message_crud.get_conversation_history(db, session.session_id, limit=50)
     return session, user_message, history, is_new_session
 
 
@@ -194,6 +194,10 @@ def _map_chunk_to_sse(chunk: dict) -> str:
         return _sse("approval_rejected", {"tool_name": chunk["tool_name"]})
     elif chunk_type == "cancelled":
         return _sse("cancelled", {"text": chunk.get("text", "")})
+    elif chunk_type == "compacting":
+        return _sse("compacting", {})
+    elif chunk_type == "compacting_done":
+        return _sse("compacting_done", {})
     elif chunk_type == "done":
         return _sse("done", {"assistant_message_id": chunk.get("assistant_message_id")})
     else:

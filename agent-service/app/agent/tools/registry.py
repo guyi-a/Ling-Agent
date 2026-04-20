@@ -23,6 +23,8 @@ from app.agent.tools.font_tool import InstallNotoSansSCTool
 from app.agent.tools.browser_tool import InstallBrowserUseTool, BrowserUseTool
 from app.agent.tools.dev_tool import DevRunTool, DevStopTool, DevRestartTool, DevLogsTool
 from app.agent.tools.health_tool import GetScaleQuestionsTool, GetHealthRecordsTool, GetAssessmentHistoryTool, SaveHealthRecordTool, SubmitAssessmentTool
+from app.agent.tools.chart_tool import GenerateHealthChartTool
+from app.agent.tools.memory_tool import SaveMemoryTool, DeleteMemoryTool
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,9 @@ _get_health_records_tool = GetHealthRecordsTool()
 _get_assessment_history_tool = GetAssessmentHistoryTool()
 _save_health_record_tool = SaveHealthRecordTool()
 _submit_assessment_tool = SubmitAssessmentTool()
+_generate_health_chart_tool = GenerateHealthChartTool()
+_save_memory_tool = SaveMemoryTool()
+_delete_memory_tool = DeleteMemoryTool()
 
 
 def set_session_id(session_id: str) -> None:
@@ -54,6 +59,7 @@ def set_session_id(session_id: str) -> None:
     _list_dir_tool.current_session_id = session_id
     _shell_tool.current_session_id = session_id
     _python_repl_tool.current_session_id = session_id
+    _generate_health_chart_tool.current_session_id = session_id
     _browser_use_tool.current_session_id = session_id
     _dev_run_tool.current_session_id = session_id
     _dev_stop_tool.current_session_id = session_id
@@ -62,11 +68,14 @@ def set_session_id(session_id: str) -> None:
 
 
 def set_user_id(user_id: str) -> None:
-    """在每次对话前注入 user_id 到健康工具"""
+    """在每次对话前注入 user_id 到健康工具和记忆工具"""
     _get_health_records_tool.current_user_id = user_id
     _get_assessment_history_tool.current_user_id = user_id
     _save_health_record_tool.current_user_id = user_id
     _submit_assessment_tool.current_user_id = user_id
+    _generate_health_chart_tool.current_user_id = user_id
+    _save_memory_tool.current_user_id = user_id
+    _delete_memory_tool.current_user_id = user_id
 
 
 def get_all_tools() -> List[BaseTool]:
@@ -102,6 +111,9 @@ def get_all_tools() -> List[BaseTool]:
         _get_assessment_history_tool,
         _save_health_record_tool,
         _submit_assessment_tool,
+        _generate_health_chart_tool,
+        _save_memory_tool,
+        _delete_memory_tool,
     ]
 
     skill_tool = create_skill_tool()
