@@ -1,0 +1,25 @@
+{
+  "servers": {
+    "brave-search": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "enabled": false
+    },
+    "sqlite-db": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "./data/app.db"],
+      "enabled": false
+    },
+    "custom-remote": {
+      "transport": "sse",
+      "url": "http://localhost:8080/sse",
+      "enabled": false,
+      "risk_level": "high"
+    }
+  }
+}

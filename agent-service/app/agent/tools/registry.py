@@ -26,6 +26,7 @@ from app.agent.tools.health_tool import GetScaleQuestionsTool, GetHealthRecordsT
 from app.agent.tools.chart_tool import GenerateHealthChartTool
 from app.agent.tools.memory_tool import SaveMemoryTool, DeleteMemoryTool
 from app.agent.tools.rag_tool import SearchKnowledgeTool
+from app.agent.mcp.client import get_mcp_tools
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,8 @@ def get_all_tools() -> List[BaseTool]:
     skill_tool = create_skill_tool()
     if skill_tool:
         tools.append(skill_tool)
+
+    tools.extend(get_mcp_tools())
 
     logger.info(f"🔧 Tools registered: {[t.name for t in tools]}")
     return tools

@@ -196,3 +196,6 @@ agent-service/deployed/
 
 # Local documentation (for Claude Code context, not for repo)
 FEATURE_ROADMAP.md
+
+# MCP config (contains env var references)
+agent-service/app/agent/mcp/mcp_servers.json

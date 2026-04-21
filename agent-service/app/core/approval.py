@@ -14,18 +14,38 @@
 import asyncio
 import uuid
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
-# 高风险工具名单（需要人工审批，与 agent_factory.py 的 interrupt_on 保持同步）
-HIGH_RISK_TOOLS: set[str] = {
+_BUILTIN_HIGH_RISK: set[str] = {
     "run_command",
     "python_repl",
     "write_file",
     "edit_file",
     "dev_run",
 }
+
+_mcp_high_risk: set[str] = set()
+
+HIGH_RISK_TOOLS: set[str] = set(_BUILTIN_HIGH_RISK)
+
+
+def register_mcp_high_risk_tools(names: Set[str]) -> None:
+    if not names:
+        return
+    _mcp_high_risk.update(names)
+    HIGH_RISK_TOOLS.update(names)
+    logger.info("已注册 MCP 高风险工具: %s", sorted(names))
+
+
+def unregister_mcp_high_risk_tools() -> None:
+    if not _mcp_high_risk:
+        return
+    HIGH_RISK_TOOLS.difference_update(_mcp_high_risk)
+    removed = sorted(_mcp_high_risk)
+    _mcp_high_risk.clear()
+    logger.info("已撤销 MCP 高风险工具: %s", removed)
 
 # ── 内存存储 ──────────────────────────────────────────
 _pending_events: Dict[str, asyncio.Event] = {}   # request_id → Event

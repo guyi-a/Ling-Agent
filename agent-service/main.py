@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
 
     # 初始化 checkpointer（AsyncSqliteSaver，持久化 LangGraph checkpoint）
     from app.agent.infra.agent_factory import init_checkpointer, close_checkpointer
+    from app.agent.mcp.client import start_mcp_client, stop_mcp_client
     await init_checkpointer("data/checkpoints.db")
 
     # 加载 RAG 知识库索引
@@ -42,7 +43,11 @@ async def lifespan(app: FastAPI):
         from app.agent.rag.store import load_store
         await load_store(settings.RAG_INDEX_DIR)
 
+    await start_mcp_client()
+
     yield
+
+    await stop_mcp_client()
 
     # 关闭 checkpointer
     await close_checkpointer()
