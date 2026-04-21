@@ -1,0 +1,56 @@
+{
+  "name": "GSES",
+  "category": "自我效能",
+  "title": "一般自我效能感量表",
+  "description": "评估个体面对困难时的自信和应对能力，共10题",
+  "instruction": "以下每题请根据您的实际情况，选择最符合的选项。",
+  "questions": [
+    {"id": 1,  "text": "如果我尽力去做的话，我总能解决难题", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 2,  "text": "即使别人反对，我也能找到方法实现自己的意愿", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 3,  "text": "对我来说，坚持理想和达成目标是轻而易举的", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 4,  "text": "我自信能有效地应付任何突如其来的事情", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 5,  "text": "凭借着我的机智，我知道如何处理无法预料的情况", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 6,  "text": "如果我努力去做，我一定能解决大多数难题", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 7,  "text": "我能平静地面对困难，因为我能信赖自己处理问题的能力", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 8,  "text": "面对问题，我通常能找到几个解决方案", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 9,  "text": "遇到麻烦时，我通常能想到一些应对方法", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]},
+    {"id": 10, "text": "不管遇到什么事，我都能应付自如", "options": [
+      {"label": "完全不正确", "score": 1}, {"label": "有点正确", "score": 2},
+      {"label": "多数正确", "score": 3}, {"label": "完全正确", "score": 4}
+    ]}
+  ],
+  "scoring": {
+    "ranges": [
+      {"min": 10, "max": 20, "severity": "自我效能感低", "description": "面对困难时较缺乏信心，建议关注自我认知与能力建设"},
+      {"min": 21, "max": 30, "severity": "自我效能感中等", "description": "具备一定的应对能力，在部分情境下信心充足"},
+      {"min": 31, "max": 40, "severity": "自我效能感高", "description": "面对挑战有较强的信心和应对能力"}
+    ]
+  }
+}

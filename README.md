@@ -85,9 +85,10 @@ cp agent-service/.env.example agent-service/.env
 # 安装后端依赖
 cd agent-service
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate  
 pip install -r requirements.txt
 cd ..
+# Windows: venv\Scripts\activate
 
 # 安装前端依赖
 cd web && npm install && cd ..

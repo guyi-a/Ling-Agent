@@ -333,6 +333,49 @@ def _score_multi_dimension(scale_data: dict, answers: list) -> dict:
     }
 
 
+_SEVERITY_ORDER = ["正常", "轻度", "中度", "重度", "极重度"]
+
+
+def _severity_rank(s: str) -> int:
+    for i, kw in enumerate(_SEVERITY_ORDER):
+        if kw in s:
+            return i
+    return 0
+
+
+def _score_subscales(scale_data: dict, answers: list) -> dict:
+    """子量表计分（DASS-21）：各维度独立评级，取最重程度作为整体严重程度"""
+    scoring = scale_data["scoring"]
+    multiplier = scoring.get("multiplier", 1)
+    subscales = scoring.get("subscales", [])
+    answer_map = {a["q"]: a["score"] for a in answers}
+
+    sub_results = {}
+    worst_rank = 0
+    worst_severity = "正常"
+
+    for sub in subscales:
+        raw = sum(answer_map.get(qid, 0) for qid in sub["questions"]) * multiplier
+        severity = "未知"
+        for r in sub["ranges"]:
+            if r["min"] <= raw <= r["max"]:
+                severity = r["severity"]
+                break
+        sub_results[sub["name"]] = {"score": raw, "severity": severity}
+        rank = _severity_rank(severity)
+        if rank > worst_rank:
+            worst_rank = rank
+            worst_severity = severity
+
+    total_score = sum(answer_map.get(a["q"], 0) for a in answers)
+    return {
+        "result_type": "severity",
+        "severity": worst_severity,
+        "total_score": total_score,
+        "result_detail": json.dumps(sub_results, ensure_ascii=False),
+    }
+
+
 class AssessmentCRUD:
     """测评 CRUD"""
 
@@ -344,6 +387,8 @@ class AssessmentCRUD:
             result = _score_dimensions(scale_data, data.answers)
         elif scoring_type == "multi_dimension":
             result = _score_multi_dimension(scale_data, data.answers)
+        elif scoring_type == "subscales":
+            result = _score_subscales(scale_data, data.answers)
         else:
             total_score = sum(a.get("score", 0) for a in data.answers)
             result = {
@@ -421,6 +466,23 @@ SEVERITY_RANGES = {
         {"min": 0, "max": 13, "severity": "压力较低"},
         {"min": 14, "max": 26, "severity": "中等压力"},
         {"min": 27, "max": 40, "severity": "压力较高"},
+    ],
+    "CES-D": [
+        {"min": 0,  "max": 15, "severity": "正常"},
+        {"min": 16, "max": 21, "severity": "轻度抑郁"},
+        {"min": 22, "max": 26, "severity": "中度抑郁"},
+        {"min": 27, "max": 60, "severity": "重度抑郁"},
+    ],
+    "GSES": [
+        {"min": 10, "max": 20, "severity": "自我效能感低"},
+        {"min": 21, "max": 30, "severity": "自我效能感中等"},
+        {"min": 31, "max": 40, "severity": "自我效能感高"},
+    ],
+    "UCLA": [
+        {"min": 20, "max": 34, "severity": "孤独感较低"},
+        {"min": 35, "max": 49, "severity": "中等孤独感"},
+        {"min": 50, "max": 64, "severity": "孤独感较高"},
+        {"min": 65, "max": 80, "severity": "孤独感强烈"},
     ],
 }
 

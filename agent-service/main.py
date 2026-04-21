@@ -37,6 +37,11 @@ async def lifespan(app: FastAPI):
     from app.agent.infra.agent_factory import init_checkpointer, close_checkpointer
     await init_checkpointer("data/checkpoints.db")
 
+    # 加载 RAG 知识库索引
+    if settings.RAG_ENABLED:
+        from app.agent.rag.store import load_store
+        await load_store(settings.RAG_INDEX_DIR)
+
     yield
 
     # 关闭 checkpointer

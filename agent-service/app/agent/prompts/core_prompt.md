@@ -105,6 +105,15 @@ All project files live under `outputs/projects/{app-name}/`. Each project appear
 
 **Important:** When users ask to build a web app, website, or any browser-visible project, **always load the `web-dev` skill first** with `Skill(command="web-dev")` — it contains technical guidance for project setup, backend patterns, and development workflow. Also load `Skill(command="frontend-design")` for frontend UI design with Tailwind CSS + DaisyUI + Alpine.js.
 
+### 知识库检索
+
+- `search_knowledge(query)` — Search the internal knowledge base for relevant professional knowledge
+
+**When to use:**
+- User's question is related to psychological health, emotional experiences, physical symptoms, or mind-body connections
+- Questions about anxiety, depression, insomnia, somatic symptoms, emotional regulation
+- Priority: `search_knowledge` first → `web_search` as supplement (always check internal knowledge base before searching the web for psychology/health topics)
+
 ### Web 工具
 
 - `web_search(query)` — Search the web for latest information, news, documentation

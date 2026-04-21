@@ -314,7 +314,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
 
     const ext = filename.split('.').pop()?.toLowerCase()
     const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')
-    const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css', 'html'].includes(ext || '')
+    const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css'].includes(ext || '')
 
     try {
       const url = workspaceApi.downloadByPathUrl(sessionId, path)
@@ -325,6 +325,10 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
 
       if (isImage || ext === 'pdf') {
         const blob = await response.blob()
+        setPreviewContent(URL.createObjectURL(blob))
+      } else if (ext === 'html') {
+        const text = await response.text()
+        const blob = new Blob([text], { type: 'text/html' })
         setPreviewContent(URL.createObjectURL(blob))
       } else if (isText) {
         setPreviewContent(await response.text())
@@ -354,7 +358,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
 
     const ext = file.name.split('.').pop()?.toLowerCase()
     const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')
-    const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css', 'html'].includes(ext || '')
+    const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css'].includes(ext || '')
 
     try {
       const url = workspaceApi.downloadByPathUrl(sessionId, file.path)
@@ -369,10 +373,14 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
       }
 
       if (isImage || ext === 'pdf') {
-        // 图片和 PDF：获取 blob，创建 object URL
+        // 图片、PDF：获取 blob，创建 object URL
         const blob = await response.blob()
-        const objectUrl = URL.createObjectURL(blob)
-        setPreviewContent(objectUrl)
+        setPreviewContent(URL.createObjectURL(blob))
+      } else if (ext === 'html') {
+        // HTML：指定 text/html 类型创建 blob，确保 iframe 能正确渲染
+        const text = await response.text()
+        const blob = new Blob([text], { type: 'text/html' })
+        setPreviewContent(URL.createObjectURL(blob))
       } else if (isText) {
         // 文本文件：直接获取文本内容
         const text = await response.text()
@@ -780,7 +788,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
               ) : (() => {
                 const ext = previewFile.name.split('.').pop()?.toLowerCase()
                 const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')
-                const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css', 'html'].includes(ext || '')
+                const isText = ['txt', 'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'css'].includes(ext || '')
 
                 if (isImage) {
                   return (
@@ -790,11 +798,11 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
                       className="max-w-full h-auto mx-auto"
                     />
                   )
-                } else if (ext === 'pdf') {
+                } else if (ext === 'pdf' || ext === 'html') {
                   return (
                     <iframe
-                      src={previewContent}
-                      className="w-full h-[70vh] border-0"
+                      src={previewContent!}
+                      className="w-full h-[70vh] border-0 rounded"
                       title={previewFile.name}
                     />
                   )

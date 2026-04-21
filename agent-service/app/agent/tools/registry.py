@@ -25,6 +25,7 @@ from app.agent.tools.dev_tool import DevRunTool, DevStopTool, DevRestartTool, De
 from app.agent.tools.health_tool import GetScaleQuestionsTool, GetHealthRecordsTool, GetAssessmentHistoryTool, SaveHealthRecordTool, SubmitAssessmentTool
 from app.agent.tools.chart_tool import GenerateHealthChartTool
 from app.agent.tools.memory_tool import SaveMemoryTool, DeleteMemoryTool
+from app.agent.tools.rag_tool import SearchKnowledgeTool
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ _submit_assessment_tool = SubmitAssessmentTool()
 _generate_health_chart_tool = GenerateHealthChartTool()
 _save_memory_tool = SaveMemoryTool()
 _delete_memory_tool = DeleteMemoryTool()
+_search_knowledge_tool = SearchKnowledgeTool()
 
 
 def set_session_id(session_id: str) -> None:
@@ -115,6 +117,11 @@ def get_all_tools() -> List[BaseTool]:
         _save_memory_tool,
         _delete_memory_tool,
     ]
+
+    # RAG 知识库搜索（仅当索引已加载时注册）
+    from app.agent.rag.store import is_ready as rag_is_ready
+    if rag_is_ready():
+        tools.append(_search_knowledge_tool)
 
     skill_tool = create_skill_tool()
     if skill_tool:

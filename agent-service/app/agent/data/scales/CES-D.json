@@ -1,0 +1,97 @@
+{
+  "name": "CES-D",
+  "category": "抑郁",
+  "title": "流调中心抑郁量表",
+  "description": "评估过去一周抑郁症状的频率，共20题。得分≥16分提示有抑郁倾向",
+  "instruction": "以下是一些人有时会有的感受或行为，请说明在过去一周中，以下情况出现了多少天。",
+  "questions": [
+    {"id": 1,  "text": "我被一些平时不会困扰我的事情所困扰", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 2,  "text": "我不想吃东西，食欲很差", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 3,  "text": "我觉得即使有家人或朋友帮助，也无法摆脱心中的苦闷", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 4,  "text": "我觉得我和其他人一样好（反向题）", "options": [
+      {"label": "几乎没有（不足1天）", "score": 3}, {"label": "有些时候（1-2天）", "score": 2},
+      {"label": "经常有（3-4天）", "score": 1}, {"label": "大多数时候（5-7天）", "score": 0}
+    ]},
+    {"id": 5,  "text": "我无法集中精神做事", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 6,  "text": "我感到情绪低落", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 7,  "text": "我觉得做任何事情都很费力", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 8,  "text": "我对未来充满希望（反向题）", "options": [
+      {"label": "几乎没有（不足1天）", "score": 3}, {"label": "有些时候（1-2天）", "score": 2},
+      {"label": "经常有（3-4天）", "score": 1}, {"label": "大多数时候（5-7天）", "score": 0}
+    ]},
+    {"id": 9,  "text": "我觉得我的生活是失败的", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 10, "text": "我感到害怕", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 11, "text": "我的睡眠情况不好", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 12, "text": "我很快乐（反向题）", "options": [
+      {"label": "几乎没有（不足1天）", "score": 3}, {"label": "有些时候（1-2天）", "score": 2},
+      {"label": "经常有（3-4天）", "score": 1}, {"label": "大多数时候（5-7天）", "score": 0}
+    ]},
+    {"id": 13, "text": "我话比平时少", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 14, "text": "我感到孤独", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 15, "text": "人们对我不友好", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 16, "text": "我很享受生活（反向题）", "options": [
+      {"label": "几乎没有（不足1天）", "score": 3}, {"label": "有些时候（1-2天）", "score": 2},
+      {"label": "经常有（3-4天）", "score": 1}, {"label": "大多数时候（5-7天）", "score": 0}
+    ]},
+    {"id": 17, "text": "我曾经哭泣", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 18, "text": "我感到悲伤", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 19, "text": "我觉得人们不喜欢我", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]},
+    {"id": 20, "text": "我感到无法继续做下去", "options": [
+      {"label": "几乎没有（不足1天）", "score": 0}, {"label": "有些时候（1-2天）", "score": 1},
+      {"label": "经常有（3-4天）", "score": 2}, {"label": "大多数时候（5-7天）", "score": 3}
+    ]}
+  ],
+  "scoring": {
+    "ranges": [
+      {"min": 0,  "max": 15, "severity": "正常", "description": "无明显抑郁症状"},
+      {"min": 16, "max": 21, "severity": "轻度抑郁", "description": "有轻度抑郁倾向，建议关注情绪变化"},
+      {"min": 22, "max": 26, "severity": "中度抑郁", "description": "有中度抑郁症状，建议寻求专业帮助"},
+      {"min": 27, "max": 60, "severity": "重度抑郁", "description": "有重度抑郁症状，强烈建议尽快就医"}
+    ]
+  }
+}

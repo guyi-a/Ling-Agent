@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
 
+    # RAG Knowledge Base
+    RAG_ENABLED: bool = True
+    RAG_INDEX_DIR: str = "data/vector_store"
+    RAG_KNOWLEDGE_DIR: str = "data/knowledge_base"
+    RAG_EMBEDDING_MODEL: str = "text-embedding-v3"
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 100
+    RAG_TOP_K: int = 5
+
     # Context Compaction
     COMPACT_ENABLED: bool = True
     COMPACT_TOKEN_THRESHOLD: int = 30000

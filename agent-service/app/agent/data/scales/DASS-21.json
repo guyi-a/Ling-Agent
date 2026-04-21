@@ -1,0 +1,134 @@
+{
+  "name": "DASS-21",
+  "category": "综合",
+  "title": "焦虑-抑郁-压力量表-21",
+  "description": "评估过去一周的抑郁、焦虑和压力症状，共21题",
+  "instruction": "请阅读每一条陈述，并圈出一个数字（0-3）来说明在过去一周中这种陈述适合您的程度。没有对或错的答案，不要在某一条上花太多时间。",
+  "scoring_type": "subscales",
+  "questions": [
+    {"id": 1,  "text": "我很难平静下来", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 2,  "text": "我感到口干", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 3,  "text": "我好像完全没有什么值得高兴的事情", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 4,  "text": "我感到呼吸困难（例如呼吸过速或喘不过气）", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 5,  "text": "我感到很难主动去做事情", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 6,  "text": "我对事情往往有过激反应", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 7,  "text": "我感到颤抖（例如手抖）", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 8,  "text": "我觉得很难放松下来", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 9,  "text": "我处于令人烦恼的情境时感到恐慌", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 10, "text": "我觉得自己没有什么值得期待的", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 11, "text": "我发现自己很容易不安", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 12, "text": "我觉得自己已经花费了许多精力", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 13, "text": "我感到悲伤、情绪低落", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 14, "text": "我发现自己对任何延误（如等待等）都缺乏耐心", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 15, "text": "我有恶心或胃部不舒服的感觉", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 16, "text": "我感到自己没有价值", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 17, "text": "我觉得生活没有意义", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 18, "text": "我发现自己很容易激动", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 19, "text": "我觉得在没有明显原因的情况下感到害怕", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 20, "text": "我感到生活没有什么价值", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]},
+    {"id": 21, "text": "我注意到自己容易感到恐慌", "options": [
+      {"label": "完全不符合", "score": 0}, {"label": "有时符合", "score": 1},
+      {"label": "经常符合", "score": 2}, {"label": "总是符合", "score": 3}
+    ]}
+  ],
+  "scoring": {
+    "type": "subscales",
+    "multiplier": 2,
+    "note": "各子量表原始分×2后对应下方范围判断严重程度",
+    "subscales": [
+      {
+        "name": "抑郁", "key": "D",
+        "questions": [3, 5, 10, 13, 16, 17, 20],
+        "ranges": [
+          {"min": 0,  "max": 9,  "severity": "正常"},
+          {"min": 10, "max": 13, "severity": "轻度抑郁"},
+          {"min": 14, "max": 20, "severity": "中度抑郁"},
+          {"min": 21, "max": 27, "severity": "重度抑郁"},
+          {"min": 28, "max": 42, "severity": "极重度抑郁"}
+        ]
+      },
+      {
+        "name": "焦虑", "key": "A",
+        "questions": [2, 4, 7, 9, 15, 19, 21],
+        "ranges": [
+          {"min": 0,  "max": 7,  "severity": "正常"},
+          {"min": 8,  "max": 9,  "severity": "轻度焦虑"},
+          {"min": 10, "max": 14, "severity": "中度焦虑"},
+          {"min": 15, "max": 19, "severity": "重度焦虑"},
+          {"min": 20, "max": 42, "severity": "极重度焦虑"}
+        ]
+      },
+      {
+        "name": "压力", "key": "S",
+        "questions": [1, 6, 8, 11, 12, 14, 18],
+        "ranges": [
+          {"min": 0,  "max": 14, "severity": "正常"},
+          {"min": 15, "max": 18, "severity": "轻度压力"},
+          {"min": 19, "max": 25, "severity": "中度压力"},
+          {"min": 26, "max": 33, "severity": "重度压力"},
+          {"min": 34, "max": 42, "severity": "极重度压力"}
+        ]
+      }
+    ]
+  }
+}
