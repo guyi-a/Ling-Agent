@@ -196,4 +196,5 @@ if __name__ == "__main__":
         port=settings.PORT,
         reload=settings.DEBUG,
         reload_dirs=["app"] if settings.DEBUG else None,
+        reload_excludes=["workspace/**", "data/**"] if settings.DEBUG else None,
     )

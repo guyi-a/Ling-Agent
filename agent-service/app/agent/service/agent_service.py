@@ -19,6 +19,14 @@ from app.schemas.message import MessageCreate
 from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS
 from app.core.config import settings
 
+import os
+_AGENT_MODE = os.environ.get("AGENT_MODE", "supervisor").lower()
+
+
+def _is_handoff_tool(name: str) -> bool:
+    """判断是否为 handoff 内部工具（transfer_to_* / transfer_back_to_*）"""
+    return name.startswith("transfer_to_") or name.startswith("transfer_back_to_")
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,18 +44,19 @@ class AgentService:
     def __init__(self, tools: List = None):
         """
         初始化 Agent Service
-
-        Args:
-            tools: 工具列表（Langchain tools）
         """
-        # 使用注册表加载所有工具，外部传入的 tools 可追加
-        self.tools = get_all_tools()
-        if tools:
-            self.tools.extend(tools)
+        self._is_supervisor = (_AGENT_MODE == "supervisor")
+
+        if self._is_supervisor:
+            self.tools = []
+        else:
+            self.tools = get_all_tools()
+            if tools:
+                self.tools.extend(tools)
 
         self._prompt_template = self._load_system_prompt_template()
         self.agent = None
-        self._active_tasks: Dict[str, asyncio.Task] = {}  # 记录活跃的流式任务 {session_id: task}
+        self._active_tasks: Dict[str, asyncio.Task] = {}
         self._langfuse_handler = self._init_langfuse()
         self._initialize_agent()
     
@@ -77,18 +86,18 @@ class AgentService:
     def _initialize_agent(self):
         """初始化 Agent 实例"""
         try:
-            # 创建 Agent（系统提示词由 _build_messages() 动态注入，不在 agent 层设置）
-            self.agent = create_Ling_Agent(
-                tools=self.tools
-            )
-            
-            if self.agent:
-                logger.info("✅ AgentService 初始化成功")
+            if self._is_supervisor:
+                self.agent = create_Ling_Agent()
             else:
-                logger.warning("⚠️ AgentService 初始化失败 - Agent 为 None")
-                
+                self.agent = create_Ling_Agent(tools=self.tools)
+
+            if self.agent:
+                logger.info("AgentService initialized (mode=%s)", _AGENT_MODE)
+            else:
+                logger.warning("AgentService init failed - Agent is None")
+
         except Exception as e:
-            logger.error(f"❌ AgentService 初始化异常: {e}", exc_info=True)
+            logger.error(f"AgentService init error: {e}", exc_info=True)
             self.agent = None
     
     def _load_system_prompt_template(self) -> str:
@@ -259,21 +268,19 @@ Always be concise and direct in your responses."""
             for msg in msgs_to_add:
                 messages.append(self._convert_to_multimodal_message(msg, session_id))
 
-        # 在历史消息之后、当前用户消息之前注入动态上下文（时间等）
-        # 放在缓存前缀之外，不影响缓存命中
+        # 动态上下文（时间、用户记忆）嵌入到 user 消息前缀
+        # 不作为独立 system 消息，避免破坏缓存前缀一致性
         now = datetime.now(ZoneInfo("Asia/Shanghai"))
-        dynamic_context = f"[System Context] Current time: {now.strftime('%Y-%m-%d %H:%M')} (Asia/Shanghai)"
+        dynamic_prefix = f"[Context: {now.strftime('%Y-%m-%d %H:%M')}]"
 
         if user_id:
             from app.agent.tools.memory_tool import load_user_memory
             memory_text = load_user_memory(user_id)
             if memory_text:
-                dynamic_context += f"\n\n[User Memory]\n{memory_text}"
+                dynamic_prefix += f"\n[User Memory]\n{memory_text}"
 
-        messages.append({"role": "system", "content": dynamic_context})
-
-        # 添加当前用户消息（支持附件）
-        current_msg = {"role": "user", "content": user_message}
+        # 添加当前用户消息（动态上下文作为前缀，支持附件）
+        current_msg = {"role": "user", "content": f"{dynamic_prefix}\n\n{user_message}"}
         if attachments:
             current_msg["extra_data"] = {"attachments": attachments}
             logger.info(f"📎 当前消息包含 {len(attachments)} 个附件")
@@ -282,20 +289,19 @@ Always be concise and direct in your responses."""
 
         messages.append(self._convert_to_multimodal_message(current_msg, session_id))
 
-        # 给最后一条 user message 注入 cache_control，使整个前缀（system prompt + 工具定义 + 历史消息）可被缓存
-        for msg in reversed(messages):
-            if msg["role"] == "user":
-                content = msg["content"]
-                if isinstance(content, str):
-                    msg["content"] = [
-                        {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
-                    ]
-                elif isinstance(content, list) and content:
-                    # 多模态消息（图片+文本），给最后一个 block 加标记
-                    last_block = content[-1]
-                    if isinstance(last_block, dict):
-                        last_block["cache_control"] = {"type": "ephemeral"}
-                break
+        # 给倒数第二条消息注入 cache_control，使缓存前缀覆盖 system prompt + 工具定义 + 全部历史
+        # 当前 user 消息（含动态时间戳）在缓存前缀之外，不影响缓存命中
+        if len(messages) >= 2:
+            target = messages[-2]
+            content = target.get("content")
+            if isinstance(content, str):
+                target["content"] = [
+                    {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                ]
+            elif isinstance(content, list) and content:
+                last_block = content[-1]
+                if isinstance(last_block, dict):
+                    last_block["cache_control"] = {"type": "ephemeral"}
 
         return messages
 
@@ -490,8 +496,8 @@ Always be concise and direct in your responses."""
         except Exception as e:
             logger.debug(f"清理上轮 checkpoint: {e}")
 
-        # 每轮全量构建消息（system_prompt CC + last_user CC = 2 个标记，确保跨轮缓存命中）
-        rendered_prompt = self._render_system_prompt(session_id)
+        # 每轮全量构建消息
+        rendered_prompt = None if self._is_supervisor else self._render_system_prompt(session_id)
         messages = self._build_messages(
             user_message, history, rendered_prompt,
             session_id=session_id, attachments=attachments,
@@ -516,10 +522,12 @@ Always be concise and direct in your responses."""
         full_response = ""
         current_round_text = ""
         tc_chunks: Dict[int, Dict] = {}
+        announced_tc_idxs: set = set()
         pending_tool_call_ids: List[str] = []  # 本轮待执行的 tool_call id 列表
         pending_tc_list: List[Dict] = []       # 本轮 tool_calls 完整信息（含 name/args）
         executed_ids: List[str] = []           # 已收到 on_tool_start 的 id
         last_round_saved_as_tool_call = False
+        last_handoff_to: Optional[str] = None  # 最后一次 "to" handoff 的目标 agent
 
         # 当前运行的输入（首次是消息列表，resume 时是 Command）
         run_input = {"messages": messages}
@@ -532,8 +540,15 @@ Always be concise and direct in your responses."""
                     kind = event.get("event", "")
 
                     if kind == "on_chat_model_start":
+                        # 如果 sub-agent 刚回来，supervisor 再次启动 → 发出 "back" handoff 徽章
+                        if last_handoff_to is not None:
+                            node = event.get("metadata", {}).get("langgraph_node", "")
+                            if node == "supervisor":
+                                yield {"type": "handoff", "to": last_handoff_to, "direction": "back"}
+                                last_handoff_to = None
                         current_round_text = ""
                         tc_chunks = {}
+                        announced_tc_idxs = set()
                         yield {"type": "model_start"}
 
                     elif kind == "on_chat_model_stream":
@@ -570,6 +585,12 @@ Always be concise and direct in your responses."""
                                 if tc_name: tc_chunks[idx]["name"] += tc_name
                                 tc_chunks[idx]["args"] += tc_args
 
+                            full_name = tc_chunks[idx]["name"]
+                            if full_name and idx not in announced_tc_idxs:
+                                announced_tc_idxs.add(idx)
+                                # 不在 chunk 阶段发 tool_generating——tool name 可能不完整或错误。
+                                # tool_generating 在 on_tool_start 时发出（name 已完整且确认非 handoff）。
+
                     elif kind == "on_chat_model_end":
                         # 记录 token 用量和缓存命中情况
                         end_output = event.get("data", {}).get("output")
@@ -605,27 +626,52 @@ Always be concise and direct in your responses."""
                                 except Exception:
                                     args = {}
                                 tc_list.append({"name": tc["name"], "args": args, "id": tc["id"]})
-                            await self._save_ai_tool_call_message(db, session_id, current_round_text, tc_list)
-                            yield {"type": "_save_point"}
-                            pending_tool_call_ids = [tc["id"] for tc in tc_list]
-                            pending_tc_list = tc_list
+                            # 过滤掉 handoff 工具调用，不存 DB、不走审批
+                            real_tc_list = [tc for tc in tc_list if not _is_handoff_tool(tc["name"])]
+                            if real_tc_list:
+                                await self._save_ai_tool_call_message(db, session_id, current_round_text, real_tc_list)
+                                yield {"type": "_save_point"}
+                            pending_tool_call_ids = [tc["id"] for tc in real_tc_list]
+                            pending_tc_list = real_tc_list
                             executed_ids = []
                             tc_chunks = {}
                             full_response = full_response[:-len(current_round_text)] if current_round_text else full_response
-                            last_round_saved_as_tool_call = True
+                            last_round_saved_as_tool_call = bool(real_tc_list)
                         else:
                             last_round_saved_as_tool_call = False
 
                     elif kind == "on_tool_start":
                         tool_name = event.get("name", "tool")
+                        if _is_handoff_tool(tool_name):
+                            target = tool_name.replace("transfer_to_", "").replace("transfer_back_to_", "")
+                            direction = "to" if tool_name.startswith("transfer_to_") else "back"
+                            if direction == "to":
+                                last_handoff_to = target
+                            logger.info(f"Handoff {direction} → {target}")
+                            # 持久化 handoff 到 DB，刷新后可从历史还原
+                            try:
+                                await message_crud.create(db, MessageCreate(
+                                    session_id=session_id,
+                                    role="assistant",
+                                    content="",
+                                    extra_data={"handoff": {"to": target, "direction": direction}}
+                                ))
+                            except Exception as e:
+                                logger.warning(f"保存 handoff 到 DB 失败: {e}")
+                            yield {"type": "handoff", "to": target, "direction": direction}
+                            continue
                         tool_input = event.get("data", {}).get("input", {})
                         # 把 pending 里的第一个 id 移到 executed（该工具已开始执行）
                         if pending_tool_call_ids:
                             executed_ids.append(pending_tool_call_ids.pop(0))
+                        # 先发 generating（此时 name 完整可靠），再发 start，前端两步动画
+                        yield {"type": "tool_generating", "tool_name": tool_name}
                         yield {"type": "tool_start", "tool_name": tool_name, "tool_input": tool_input}
 
                     elif kind == "on_tool_end":
                         tool_name = event.get("name", "tool")
+                        if _is_handoff_tool(tool_name):
+                            continue
                         output = event.get("data", {}).get("output")
                         content = getattr(output, "content", output)
                         if isinstance(content, (list, dict)):

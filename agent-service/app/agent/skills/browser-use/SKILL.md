@@ -117,7 +117,7 @@ Required order:
 Defaults:
 - Prefer the user's existing browser profile to preserve login state
 - Browser window is always visible (`--headed` is default)
-- After the task is complete, close the browser session unless the user wants it left open
+- **Do NOT close the browser after a task** — leave it open so the user can continue interacting. Only call `close` when the user explicitly asks to close the browser.
 
 Command-shape rule:
 - Global flags such as `--headed` and `--profile` must come **before** the action verb
@@ -299,9 +299,6 @@ browser_use('state')
 
 # 4. Click element
 browser_use('click 5')
-
-# 5. Close browser
-browser_use('close')
 ```
 
 ### Extract Data

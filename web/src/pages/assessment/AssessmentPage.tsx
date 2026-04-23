@@ -264,7 +264,7 @@ export default function AssessmentPage() {
                                   {(() => { try { const d = JSON.parse(latest.result_detail || '{}'); return `${d.title || latest.severity} ${d.similarity != null ? d.similarity + '%' : ''}`; } catch { return latest.severity; } })()}
                                 </span>
                               )}
-                              <span className="text-[#c9b896] dark:text-gray-600">{new Date(latest.created_at).toLocaleDateString('zh-CN')}</span>
+                              <span className="text-[#c9b896] dark:text-gray-600">{new Date(latest.created_at.endsWith('Z') || latest.created_at.includes('+') ? latest.created_at : latest.created_at + 'Z').toLocaleDateString('zh-CN')}</span>
                             </div>
                           )}
                           <div className="flex items-center justify-between">

@@ -101,7 +101,7 @@ export default function ChatPage() {
   const [editContent, setEditContent] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewTitle, setPreviewTitle] = useState('')
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  const [collapsedTools, setCollapsedTools] = useState<Set<string>>(new Set())
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null)
   const [pastedImages, setPastedImages] = useState<PastedImage[]>([])
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
@@ -141,6 +141,15 @@ export default function ChatPage() {
 
         // 检查是否有待审批状态
         const pendingApproval = extraData.pending_approval || null
+
+        // handoff 消息：还原为 handoff part
+        if (msg.role === 'assistant' && extraData.handoff) {
+          parts.push({
+            type: 'handoff' as const,
+            agentName: extraData.handoff.to,
+            handoffDirection: extraData.handoff.direction as 'to' | 'back',
+          })
+        }
 
         // 如果有 tool_calls，重建交错的 parts
         // 但如果有 pending_approval，说明工具还没执行（被审批拦截），
@@ -187,9 +196,12 @@ export default function ChatPage() {
           }
         }
 
-        // 恢复审批状态
+        // 恢复审批状态：只恢复真正待处理的审批（会话最后一条消息，且内容不含"停止"标记）
         let approvalRequest = undefined
-        if (msg.role === 'assistant' && pendingApproval) {
+        const isLastMessage = idx === (response.messages || []).length - 1
+        const contentStr = typeof msg.content === 'string' ? msg.content : ''
+        const isCancelledApproval = contentStr.includes('停止生成') || contentStr.includes('已停止')
+        if (msg.role === 'assistant' && pendingApproval && isLastMessage && !isCancelledApproval) {
           approvalRequest = {
             requestId: pendingApproval.request_id,
             toolName: pendingApproval.tool_name,
@@ -840,9 +852,28 @@ export default function ChatPage() {
                               )
                             }
 
+                            if (part.type === 'handoff') {
+                              const agentLabels: Record<string, string> = {
+                                general: '通用助手',
+                                developer: '开发者',
+                                psych: '心理顾问',
+                                data: '数据分析',
+                                document: '文档处理',
+                                supervisor: 'Supervisor',
+                              }
+                              const label = agentLabels[part.agentName ?? ''] ?? part.agentName
+                              return (
+                                <div key={partIdx} className="my-1.5 not-prose">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700">
+                                    {part.handoffDirection === 'back' ? `↩ ${label}` : label}
+                                  </span>
+                                </div>
+                              )
+                            }
+
                             if (part.type === 'tool') {
                               const toolKey = `${msg.id}-${partIdx}`
-                              const isExpanded = expandedTools.has(toolKey)
+                              const isExpanded = !collapsedTools.has(toolKey)
                               const canExpand = !part.isSkill && part.toolStatus === 'done' && (part.toolInput || part.toolOutput)
 
                               return (
@@ -851,7 +882,7 @@ export default function ChatPage() {
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 ${canExpand ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                                     onClick={() => {
                                       if (!canExpand) return
-                                      setExpandedTools(prev => {
+                                      setCollapsedTools(prev => {
                                         const next = new Set(prev)
                                         if (next.has(toolKey)) next.delete(toolKey)
                                         else next.add(toolKey)
@@ -859,7 +890,7 @@ export default function ChatPage() {
                                       })
                                     }}
                                   >
-                                    {part.toolStatus === 'pending' && (
+                                    {(part.toolStatus === 'pending' || part.toolStatus === 'generating') && (
                                       <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                                     )}
                                     {part.toolStatus === 'done' && (
@@ -874,13 +905,15 @@ export default function ChatPage() {
                                     <span className="text-gray-500 dark:text-gray-400">
                                       {part.isSkill ? (
                                         <>
+                                          {part.toolStatus === 'generating' && '加载中...'}
                                           {part.toolStatus === 'pending' && '加载中...'}
                                           {part.toolStatus === 'done' && '加载完成'}
                                           {part.toolStatus === 'rejected' && '等待审批'}
                                         </>
                                       ) : (
                                         <>
-                                          {part.toolStatus === 'pending' && '调用中...'}
+                                          {part.toolStatus === 'generating' && '生成中...'}
+                                          {part.toolStatus === 'pending' && '执行中...'}
                                           {part.toolStatus === 'done' && '调用成功'}
                                           {part.toolStatus === 'rejected' && '等待审批'}
                                         </>
@@ -969,9 +1002,21 @@ export default function ChatPage() {
                         )}
 
                         {/* 流式加载指示器（带打字机光标） */}
-                        {msg.isStreaming && msg.parts.length > 0 && (
-                          <span className="typing-cursor inline-block"></span>
-                        )}
+                        {msg.isStreaming && msg.parts.length > 0 && (() => {
+                          const lastPart = msg.parts[msg.parts.length - 1]
+                          // 工具执行中（pending）：显示跳动圆点
+                          if (lastPart.type === 'tool' && (lastPart.toolStatus === 'pending' || lastPart.toolStatus === 'generating')) {
+                            return (
+                              <div className="flex items-center gap-1 mt-2 ml-1">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                              </div>
+                            )
+                          }
+                          // 工具完成或文字结尾：内联打字光标
+                          return <span className="typing-cursor inline-block"></span>
+                        })()}
                         {msg.isStreaming && msg.parts.length === 0 && (
                           <div className="flex items-center gap-2 mt-2 text-gray-500 dark:text-gray-400">
                             <Loader2 className="w-4 h-4 animate-spin text-primary-500" />

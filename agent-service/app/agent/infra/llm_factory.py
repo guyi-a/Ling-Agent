@@ -9,9 +9,12 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-def get_llm() -> Optional[ChatOpenAI]:
+def get_llm(model: str = None) -> Optional[ChatOpenAI]:
     """
     获取LLM实例
+
+    Args:
+        model: 指定模型名称，不传则使用默认模型 (settings.LLM_MODEL)
 
     Returns:
         LLM实例，如果配置不完整则返回None
@@ -24,6 +27,8 @@ def get_llm() -> Optional[ChatOpenAI]:
         logger.warning("LLM_BASE_URL 未配置，LLM功能将不可用")
         return None
 
+    model_name = model or settings.LLM_MODEL
+
     try:
         llm = ChatOpenAI(
             temperature=0.3,
@@ -32,10 +37,10 @@ def get_llm() -> Optional[ChatOpenAI]:
             max_retries=2,
             base_url=settings.LLM_BASE_URL,
             api_key=settings.DASHSCOPE_API_KEY,
-            model=settings.LLM_MODEL,
+            model=model_name,
             stream_usage=True,
         )
-        logger.info(f"✓ LLM实例已创建 - model: {settings.LLM_MODEL}")
+        logger.info(f"✓ LLM实例已创建 - model: {model_name}")
         return llm
     except Exception as e:
         logger.error(f"创建LLM实例失败: {e}", exc_info=True)

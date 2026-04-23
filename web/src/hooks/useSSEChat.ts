@@ -2,14 +2,16 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 
 export interface MessagePart {
-  type: 'text' | 'tool' | 'image'
+  type: 'text' | 'tool' | 'image' | 'handoff'
   content?: string  // for text
   imageUrl?: string  // for image (preview URL or workspace path)
   toolName?: string  // for tool
-  toolStatus?: 'pending' | 'done' | 'rejected'  // for tool
+  toolStatus?: 'generating' | 'pending' | 'done' | 'rejected'  // for tool
   isSkill?: boolean  // Skill 工具标记
   toolInput?: any    // 工具输入参数
   toolOutput?: string // 工具输出结果
+  agentName?: string  // for handoff
+  handoffDirection?: 'to' | 'back'  // for handoff
 }
 
 export interface Message {
@@ -151,6 +153,26 @@ export function useSSEChat() {
                 return { ...msg, parts }
               })
             )
+          } else if (event === 'tool_generating') {
+            lastPartWasTool = true
+
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.id !== aiMessageId) return msg
+
+                return {
+                  ...msg,
+                  parts: [
+                    ...msg.parts,
+                    {
+                      type: 'tool',
+                      toolName: parsed.tool_name,
+                      toolStatus: 'generating' as const,
+                    }
+                  ]
+                }
+              })
+            )
           } else if (event === 'tool_start') {
             lastPartWasTool = true
 
@@ -164,19 +186,33 @@ export function useSSEChat() {
               prev.map((msg) => {
                 if (msg.id !== aiMessageId) return msg
 
-                return {
-                  ...msg,
-                  parts: [
-                    ...msg.parts,
-                    {
-                      type: 'tool',
+                const parts = [...msg.parts]
+                let upgraded = false
+                for (let i = parts.length - 1; i >= 0; i--) {
+                  if (parts[i].type === 'tool' && parts[i].toolStatus === 'generating') {
+                    parts[i] = {
+                      ...parts[i],
                       toolName: displayName,
                       toolStatus: 'pending' as const,
                       isSkill,
                       toolInput: parsed.tool_input,
                     }
-                  ]
+                    upgraded = true
+                    break
+                  }
                 }
+
+                if (!upgraded) {
+                  parts.push({
+                    type: 'tool',
+                    toolName: displayName,
+                    toolStatus: 'pending' as const,
+                    isSkill,
+                    toolInput: parsed.tool_input,
+                  })
+                }
+
+                return { ...msg, parts }
               })
             )
           } else if (event === 'tool_end') {
@@ -188,7 +224,7 @@ export function useSSEChat() {
                 for (let i = parts.length - 1; i >= 0; i--) {
                   if (
                     parts[i].type === 'tool' &&
-                    parts[i].toolStatus === 'pending'
+                    (parts[i].toolStatus === 'pending' || parts[i].toolStatus === 'generating')
                   ) {
                     parts[i] = { ...parts[i], toolStatus: 'done' as const, toolOutput: parsed.tool_output }
                     break
@@ -198,13 +234,29 @@ export function useSSEChat() {
                 return { ...msg, parts }
               })
             )
+          } else if (event === 'handoff') {
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.id !== aiMessageId) return msg
+                return {
+                  ...msg,
+                  parts: [
+                    ...msg.parts,
+                    {
+                      type: 'handoff' as const,
+                      agentName: parsed.to,
+                      handoffDirection: parsed.direction as 'to' | 'back',
+                    }
+                  ]
+                }
+              })
+            )
           } else if (event === 'approval_required') {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === aiMessageId
                   ? {
                       ...msg,
-                      isStreaming: false,
                       approvalRequest: {
                         requestId: parsed.request_id,
                         toolName: parsed.tool_name,
@@ -237,7 +289,12 @@ export function useSSEChat() {
               prev.map((msg) => {
                 if (msg.id !== aiMessageId) return msg
 
-                const parts = [...msg.parts]
+                const parts = msg.parts.map(part => {
+                  if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
+                    return { ...part, toolStatus: 'done' as const }
+                  }
+                  return part
+                })
                 parts.push({
                   type: 'text',
                   content: '\n\n_已停止生成_'
@@ -246,6 +303,7 @@ export function useSSEChat() {
                 return {
                   ...msg,
                   isStreaming: false,
+                  approvalRequest: undefined,
                   parts
                 }
               })
@@ -313,32 +371,23 @@ export function useSSEChat() {
   }, [currentSessionId])
 
   const stopStreaming = useCallback(async () => {
-    // 先通知后端停止
-    if (currentSessionId) {
-      try {
-        await fetch(`/api/chat/${currentSessionId}/stop`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        })
-      } catch (error) {
-        console.error('停止请求失败:', error)
-      }
-    }
+    if (!currentSessionId) return
 
-    // 然后中止前端连接
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
+    try {
+      await fetch(`/api/chat/${currentSessionId}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    } catch (error) {
+      console.error('停止请求失败:', error)
     }
-
-    // 清除所有消息的 isStreaming 状态
-    setMessages(prev =>
-      prev.map(msg => msg.isStreaming ? { ...msg, isStreaming: false } : msg)
-    )
-    setIsStreaming(false)
+    // 不在这里 abort 连接，也不手动改 isStreaming。
+    // 等后端通过 SSE 推送 `cancelled` 事件，由 processSSEStream 里的
+    // cancelled 处理器负责清理状态、标记工具 done、关闭 reader 并返回。
+    // finally 块里的兜底清理会在 processSSEStream 返回后补上任何遗漏。
   }, [currentSessionId, token])
 
   const sendMessage = useCallback(
@@ -393,11 +442,7 @@ export function useSSEChat() {
         await processSSEStream(response, aiMessageId, { userMessage })
       } catch (error: any) {
         if (error.name === 'AbortError') {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === aiMessageId ? { ...msg, isStreaming: false } : msg
-            )
-          )
+          // abort 由 stopStreaming 触发，它已经处理了消息状态，这里不需要重复处理
         } else {
           console.error('Stream error:', error)
           setMessages((prev) =>
@@ -411,6 +456,20 @@ export function useSSEChat() {
       } finally {
         setIsStreaming(false)
         abortControllerRef.current = null
+        // 兜底清理：无论流如何结束，确保消息不再处于 streaming 状态，挂起工具标记为 done，清除残留审批卡
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id !== aiMessageId) return msg
+            if (!msg.isStreaming && !msg.approvalRequest) return msg
+            const parts = msg.parts.map((part) => {
+              if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
+                return { ...part, toolStatus: 'done' as const }
+              }
+              return part
+            })
+            return { ...msg, isStreaming: false, approvalRequest: undefined, parts }
+          })
+        )
       }
     },
     [isStreaming, currentSessionId, token, processSSEStream]
@@ -425,6 +484,8 @@ export function useSSEChat() {
   const reconnect = useCallback(async (sessionId: string): Promise<boolean> => {
     const currentToken = useAuthStore.getState().token
     if (!currentToken) return false
+
+    let reconnectMsgId: string | undefined
 
     try {
       abortControllerRef.current = new AbortController()
@@ -443,30 +504,12 @@ export function useSSEChat() {
       // 保留 DB 已加载的消息，找到最后一条 assistant 消息复用，
       // 或在末尾追加一条空的 streaming 消息
       const aiMessageId = `reconnect-${Date.now()}`
+      reconnectMsgId = aiMessageId
 
-      // 从 ref 读取当前消息（避免 setMessages 回调的 React 时序问题）
-      const currentMsgs = messagesRef.current
-      let initialAccumulated = ''
+      // 不从现有消息读 initialAccumulated — gap_text 是完整文本，直接替换即可。
+      // 如果读旧文本再追加 gap_text，会造成 DB 已保存内容 + gap_text 的重复。
+      const initialAccumulated = ''
       let initialLastPartWasTool = false
-      let lastAssistantIdx = -1
-
-      for (let i = currentMsgs.length - 1; i >= 0; i--) {
-        if (currentMsgs[i].role === 'assistant') {
-          lastAssistantIdx = i
-          break
-        }
-      }
-
-      if (lastAssistantIdx >= 0) {
-        const parts = currentMsgs[lastAssistantIdx].parts
-        if (parts.length > 0) {
-          const lastPart = parts[parts.length - 1]
-          initialLastPartWasTool = lastPart.type === 'tool'
-          if (lastPart.type === 'text') {
-            initialAccumulated = lastPart.content || ''
-          }
-        }
-      }
 
       setMessages(prev => {
         // 找最后一条 assistant 消息复用
@@ -501,6 +544,21 @@ export function useSSEChat() {
     } finally {
       setIsStreaming(false)
       abortControllerRef.current = null
+      if (reconnectMsgId) {
+        const msgId = reconnectMsgId
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id !== msgId || !msg.isStreaming) return msg
+            const parts = msg.parts.map((part) => {
+              if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
+                return { ...part, toolStatus: 'done' as const }
+              }
+              return part
+            })
+            return { ...msg, isStreaming: false, parts }
+          })
+        )
+      }
     }
   }, [processSSEStream])
 

@@ -7,14 +7,14 @@ echo ""
 echo "📡 启动后端服务 (端口 9000)..."
 cd agent-service
 source venv/bin/activate 2>/dev/null || true
-uvicorn main:app --host 0.0.0.0 --port 9000 --reload &
+uvicorn main:app --host 0.0.0.0 --port 9000 --reload --reload-dir app --reload-exclude 'workspace/*' --reload-exclude 'data/*' &
 BACKEND_PID=$!
 cd ..
 
 sleep 2
 
 # 启动前端
-echo "🎨 启动前端服务 (端口 5173)..."
+echo "🎨 启动前端服务 (端口 5174)..."
 cd web
 npm run dev &
 FRONTEND_PID=$!
@@ -23,7 +23,7 @@ cd ..
 echo ""
 echo "✅ 服务已启动！"
 echo ""
-echo "📱 前端地址: http://localhost:5173"
+echo "📱 前端地址: http://localhost:5174"
 echo "🔧 后端地址: http://localhost:9000"
 echo "📖 API 文档: http://localhost:9000/docs"
 echo ""

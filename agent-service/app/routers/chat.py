@@ -184,12 +184,16 @@ def _map_chunk_to_sse(chunk: dict) -> str:
         return _sse("tool_start", {"tool_name": chunk["tool_name"], "tool_input": chunk.get("tool_input", {})})
     elif chunk_type == "tool_end":
         return _sse("tool_end", {"tool_name": chunk["tool_name"], "tool_output": chunk.get("tool_output", "")})
+    elif chunk_type == "tool_generating":
+        return _sse("tool_generating", {"tool_name": chunk["tool_name"]})
     elif chunk_type == "approval_required":
         return _sse("approval_required", {
             "request_id": chunk["request_id"],
             "tool_name": chunk["tool_name"],
             "tool_input": chunk.get("tool_input", {}),
         })
+    elif chunk_type == "handoff":
+        return _sse("handoff", {"to": chunk["to"], "direction": chunk.get("direction", "to")})
     elif chunk_type == "approval_rejected":
         return _sse("approval_rejected", {"tool_name": chunk["tool_name"]})
     elif chunk_type == "cancelled":
@@ -302,17 +306,15 @@ async def resume_stream(
 
     buffer = stream_buffers.get(session_id)
     if subscribe_only:
-        # subscribe 模式：注入间隙文本 + 待审批事件，然后订阅新事件
+        # subscribe 模式：只注入待审批事件，然后订阅新事件。
+        # 不注入 gap_text：前端通过 loadSessionHistory 已加载 DB 历史，
+        # 重复注入 gap_text 会导致同一内容在多次重连时被追加多次。
         async def _subscribe_with_catchup():
-            # 1. 注入 DB 保存点后的间隙文本（避免刷新后文字变少）
-            gap = buffer._gap_text
-            if gap:
-                yield _sse("token", {"text": gap})
-            # 2. 注入待审批事件（如果有）
+            # 注入待审批事件（如果有）
             pending = buffer._pending_approval_chunk
             if pending:
                 yield pending
-            # 3. 订阅后续新事件
+            # 订阅后续新事件
             async for chunk in buffer.subscribe():
                 yield chunk
         stream = _subscribe_with_catchup()

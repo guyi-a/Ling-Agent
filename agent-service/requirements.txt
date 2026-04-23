@@ -41,6 +41,9 @@ langfuse>=4.0.0            # LLM tracing & observability
 # LangGraph checkpoint persistence
 langgraph-checkpoint-sqlite>=2.0.0
 
+# Multi-agent (Supervisor + Sub-agents)
+langgraph-supervisor>=0.0.1
+
 # Data visualization
 plotly>=5.20.0
 

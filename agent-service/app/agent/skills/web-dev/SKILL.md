@@ -270,11 +270,194 @@ curl -s -X DELETE http://127.0.0.1:{port}/api/todos/1
 
 Frontend uses **Tailwind CSS + DaisyUI + Alpine.js** — all via CDN, no build step.
 
-- **DaisyUI** — semantic component classes (`btn`, `card`, `navbar`, `modal`)
-- **Tailwind CSS** — utility CSS for fine-grained control
-- **Alpine.js** — lightweight reactivity via HTML attributes (`x-data`, `x-show`, `@click`, `x-for`)
+| Library | Role | CDN |
+|---------|------|-----|
+| **Tailwind CSS** | Utility-first CSS | `<script src="https://cdn.tailwindcss.com"></script>` |
+| **DaisyUI** | Semantic component classes | `<link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">` |
+| **Alpine.js** | Lightweight reactivity | `<script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>` |
 
-For detailed component reference, layout patterns, and Alpine.js examples, load the `frontend-design` skill: `Skill(command="frontend-design")`.
+**CDN order matters:** DaisyUI CSS first → Tailwind JS → Alpine.js (with `defer`).
+
+### DaisyUI Components
+
+```html
+<!-- Buttons -->
+<button class="btn btn-primary">Primary</button>
+<button class="btn btn-secondary">Secondary</button>
+<button class="btn btn-ghost">Ghost</button>
+<button class="btn btn-outline btn-primary">Outline</button>
+<button class="btn btn-sm">Small</button>
+<button class="btn btn-primary" :disabled="saving">
+    <span x-show="saving" class="loading loading-spinner loading-sm"></span>Save
+</button>
+
+<!-- Card -->
+<div class="card bg-base-100 shadow-md">
+    <div class="card-body">
+        <h2 class="card-title">Title</h2>
+        <p>Content</p>
+        <div class="card-actions justify-end">
+            <button class="btn btn-primary btn-sm">Action</button>
+        </div>
+    </div>
+</div>
+
+<!-- Form Controls -->
+<input type="text" class="input input-bordered w-full" placeholder="Enter text...">
+<select class="select select-bordered w-full">
+    <option disabled selected>Pick one</option>
+    <option>Option A</option>
+</select>
+<textarea class="textarea textarea-bordered w-full" rows="3"></textarea>
+<label class="label cursor-pointer">
+    <span class="label-text">Remember me</span>
+    <input type="checkbox" class="checkbox checkbox-primary" x-model="remember">
+</label>
+<div class="join w-full">
+    <input class="input input-bordered join-item flex-1" x-model="newItem">
+    <button class="btn btn-primary join-item" @click="addItem()">Add</button>
+</div>
+
+<!-- Feedback -->
+<span class="badge badge-primary">New</span>
+<span class="badge badge-success">Done</span>
+<span class="badge badge-warning">Pending</span>
+<div class="alert alert-success"><span>Success message</span></div>
+<div class="alert alert-error"><span>Error message</span></div>
+<span class="loading loading-spinner loading-md"></span>
+
+<!-- Navbar + Tabs -->
+<div class="navbar bg-base-100 shadow-md">
+    <div class="flex-1"><span class="text-xl font-bold px-4">App Name</span></div>
+    <div class="flex-none gap-2">
+        <button class="btn btn-ghost btn-sm" @click="tab = 'list'">List</button>
+    </div>
+</div>
+<div class="tabs tabs-bordered">
+    <a class="tab" :class="tab === 'all' && 'tab-active'" @click="tab = 'all'">All</a>
+    <a class="tab" :class="tab === 'done' && 'tab-active'" @click="tab = 'done'">Done</a>
+</div>
+
+<!-- Modal -->
+<button class="btn btn-primary" @click="showModal = true">Open</button>
+<div class="modal" :class="showModal && 'modal-open'">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Confirm</h3>
+        <p class="py-4">Are you sure?</p>
+        <div class="modal-action">
+            <button class="btn btn-ghost" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="confirm(); showModal = false">OK</button>
+        </div>
+    </div>
+    <div class="modal-backdrop" @click="showModal = false"></div>
+</div>
+
+<!-- Table -->
+<div class="overflow-x-auto">
+    <table class="table">
+        <thead><tr><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+            <template x-for="item in items" :key="item.id">
+                <tr class="hover">
+                    <td x-text="item.name"></td>
+                    <td><span class="badge badge-success" x-show="item.done">Done</span></td>
+                    <td><button class="btn btn-ghost btn-xs text-error" @click="remove(item.id)">Delete</button></td>
+                </tr>
+            </template>
+        </tbody>
+    </table>
+</div>
+
+<!-- Stats -->
+<div class="stats shadow">
+    <div class="stat"><div class="stat-title">Total</div><div class="stat-value" x-text="items.length">0</div></div>
+    <div class="stat"><div class="stat-title">Done</div><div class="stat-value text-success" x-text="items.filter(i=>i.done).length">0</div></div>
+</div>
+```
+
+### Alpine.js Patterns
+
+```html
+<!-- Function-based state -->
+<div x-data="app()" x-init="init()">...</div>
+<script>
+function app() {
+    return {
+        items: [], loading: true, filter: 'all',
+        async init() { await this.loadItems(); },
+        get filteredItems() {
+            return this.filter === 'all' ? this.items : this.items.filter(i => i.status === this.filter);
+        },
+        async loadItems() {
+            this.loading = true;
+            const res = await fetch("api/items");
+            this.items = await res.json();
+            this.loading = false;
+        },
+    }
+}
+</script>
+
+<!-- Conditional & list -->
+<div x-show="isOpen" x-transition>...</div>
+<template x-if="user"><span x-text="user.name"></span></template>
+<template x-for="item in items" :key="item.id">
+    <div class="card bg-base-100 shadow-sm mb-2">
+        <div class="card-body p-4 flex-row items-center justify-between">
+            <span x-text="item.name"></span>
+            <button class="btn btn-ghost btn-xs text-error" @click="remove(item.id)">Delete</button>
+        </div>
+    </div>
+</template>
+<div x-show="items.length === 0 && !loading" class="text-center py-12 text-base-content/50">
+    No items yet.
+</div>
+```
+
+### Layout Patterns
+
+```html
+<!-- Standard (Navbar + Content) -->
+<body class="min-h-screen bg-base-200">
+    <div class="navbar bg-base-100 shadow-md">...</div>
+    <div class="max-w-4xl mx-auto p-6"><!-- content --></div>
+</body>
+
+<!-- Card Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">...</div>
+
+<!-- Two-Column (List + Detail) -->
+<div class="flex gap-6">
+    <div class="w-1/3"><!-- list --></div>
+    <div class="flex-1"><!-- detail --></div>
+</div>
+
+<!-- Responsive helpers -->
+<div class="flex flex-col md:flex-row gap-4">...</div>
+<div class="w-full max-w-4xl mx-auto px-4">...</div>
+<div class="hidden md:block">Desktop only</div>
+```
+
+### DaisyUI Themes
+
+```html
+<html data-theme="light">   <!-- default -->
+<html data-theme="dark">
+<html data-theme="cupcake"> <!-- soft pastel -->
+```
+
+Semantic colors: `bg-base-100/200/300`, `text-base-content`, `text-primary/secondary/accent`, `text-success/warning/error`
+
+### Frontend Pitfalls
+
+| Pitfall | Fix |
+|---------|-----|
+| **fetch 路径加了前导 `/`** | 用 `fetch("api/...")` 不是 `fetch("/api/...")` |
+| **Alpine.js 没加 `defer`** | `<script src="...alpinejs..." defer></script>` |
+| **DaisyUI CSS 放在 Tailwind 后面** | DaisyUI CSS 必须在 Tailwind JS **之前** |
+| **x-for 没有 key** | `<template x-for="item in items" :key="item.id">` |
+| **x-data 里用箭头函数** | 用 `function app() { return {...} }` 不用箭头函数 |
+| **忘记 x-init** | `<div x-data="app()" x-init="init()">` 两个都要写 |
 
 ### HTML Template
 

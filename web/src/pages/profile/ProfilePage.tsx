@@ -93,7 +93,8 @@ export default function ProfilePage() {
       setSessionCount(data.length)
     }).catch(() => {})
     apiClient.get('/api/auth/me').then((res) => {
-      const date = new Date(res.data.created_at)
+      const raw = res.data.created_at as string
+      const date = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z')
       setJoinedAt(date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }))
     }).catch(() => {})
   }, [])

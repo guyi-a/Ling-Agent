@@ -14,8 +14,14 @@ const EMOTIONS = [
   { label: '疲惫', emoji: '😩' },
 ]
 
+// Server stores UTC naive datetimes; add 'Z' so JS parses correctly then converts to local time
+function parseUTC(dateStr: string): Date {
+  const s = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
+  return new Date(s)
+}
+
 function formatTime(dateStr: string) {
-  const d = new Date(dateStr)
+  const d = parseUTC(dateStr)
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -92,14 +98,14 @@ export default function DiaryPage() {
   }
 
   const sortedRecords = [...records].sort((a, b) => {
-    const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    const diff = parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime()
     return sortOrder === 'newest' ? diff : -diff
   })
   const totalPages = Math.max(1, Math.ceil(sortedRecords.length / PAGE_SIZE))
   const pagedRecords = sortedRecords.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const pagedGrouped = pagedRecords.reduce<Record<string, HealthRecord[]>>((acc, r) => {
-    const date = new Date(r.created_at).toLocaleDateString('zh-CN')
+    const date = parseUTC(r.created_at).toLocaleDateString('zh-CN')
     if (!acc[date]) acc[date] = []
     acc[date].push(r)
     return acc
@@ -205,7 +211,7 @@ export default function DiaryPage() {
                             {isActive && (
                               <div className="px-3 py-3 bg-[#f0e6d3]/60 dark:bg-gray-700/40 rounded-lg text-sm diary-card-enter">
                                 <p className="text-xs text-[#b8a080] mb-1">
-                                  {new Date(r.created_at).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} {formatTime(r.created_at)}
+                                  {parseUTC(r.created_at).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} {formatTime(r.created_at)}
                                 </p>
                                 {isBody ? (
                                   <>
