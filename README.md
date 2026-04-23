@@ -1,8 +1,23 @@
 # Ling-Agent
 
-> AI Agent 生产力工具，支持流式对话、技能加载、Human-in-the-Loop 审批、工作区沙箱隔离与心理健康支持
+> 基于多 Agent 协作架构的 AI 生产力工具，支持流式对话、智能路由、Human-in-the-Loop 审批、工作区沙箱隔离与心理健康支持
 
 ## 核心特性
+
+### 多 Agent 架构
+
+Ling-Agent 采用 `langgraph_supervisor` 构建的多 Agent 协作系统，由一个路由 Agent 和五个专业子 Agent 组成：
+
+| Agent | 模型 | 职责 |
+|-------|------|------|
+| **supervisor** | qwen-max | 分析用户意图，路由到对应子 Agent |
+| **general** | qwen-plus | 文件操作、网络搜索、通用问答、记忆管理 |
+| **developer** | qwen3.5-plus | Web 应用开发、浏览器自动化、Dev 服务器管理 |
+| **psych** | qwen-plus | 心理健康支持、情绪疏导、健康日记、心理测评 |
+| **data** | qwen-plus | CSV/Excel 数据分析、统计图表、数据报告 |
+| **document** | qwen-plus | Markdown→PDF、Word/PDF→PPTX、文档处理 |
+
+每次对话前端会展示 **切换徽章**，实时显示当前由哪个子 Agent 处理请求。
 
 ### 对话系统
 - **真流式输出** — 基于 SSE 的 token-level 流式响应
@@ -30,13 +45,14 @@
 | `frontend-design` | 前端 UI 设计（Tailwind/DaisyUI/Alpine.js） |
 | `psych-counseling` | 心理健康支持与评估引导 |
 
-### 工具集成（12 个工具）
+### 工具集成
 - **文件操作** — `read_file`（支持 .docx/.pdf/.pptx）、`write_file`、`edit_file`、`list_dir`
 - **代码执行** — `python_repl`（脚本持久化、编辑模式）、`run_command`
 - **网络能力** — `web_search`（DuckDuckGo）、`web_fetch`（SSRF 防护）
 - **浏览器控制** — `browser_use`、`install_browser_use`
 - **健康工具** — `save_health_record`、`get_health_records`、`get_assessment_history`、`get_scale_questions`、`submit_assessment`、`search_psych_knowledge`
 - **开发工具** — `dev_run`、`dev_logs`、`dev_stop`、`dev_restart`
+- **记忆工具** — `save_memory`、`delete_memory`（跨会话持久化用户信息）
 - **系统工具** — `install_noto_sans_sc`、`Skill`（技能加载器）
 
 ### 心理健康模块
@@ -124,8 +140,16 @@ cd web && npm run dev
 ```bash
 # LLM（必填）
 DASHSCOPE_API_KEY=sk-xxx
-LLM_MODEL=qwen-vl-max
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+
+# 各 Agent 模型（可按需调整）
+LLM_MODEL=qwen-vl-max              # 多模态（图像输入）
+LLM_MODEL_ROUTER=qwen-max          # Supervisor 路由 Agent（需要可靠的 function calling）
+LLM_MODEL_DEVELOPER=qwen3.5-plus   # Developer Agent（最强代码能力）
+LLM_MODEL_GENERAL=qwen-plus        # General Agent
+LLM_MODEL_PSYCH=qwen-plus          # Psych Agent
+LLM_MODEL_DATA=qwen-plus           # Data Agent
+LLM_MODEL_DOCUMENT=qwen-plus       # Document Agent
 
 # 数据库
 DATABASE_URL=sqlite:///./app.db
@@ -142,17 +166,28 @@ ACCESS_TOKEN_EXPIRE_MINUTES=1440
 PORT=9000
 DEBUG=true
 LOG_LEVEL=INFO
+
+# RAG 知识库（可选）
+RAG_ENABLED=true
+RAG_EMBEDDING_MODEL=text-embedding-v3
+
+# Langfuse 可观测性（可选）
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
 ```
 
 ## 技术架构
 
 ### 后端
 - **框架**: FastAPI + LangGraph + LangChain
-- **LLM**: 通义千问 qwen-vl-max（兼容 OpenAI API）
+- **多 Agent**: `langgraph_supervisor` — Supervisor + 5 专业子 Agent
+- **LLM**: 通义千问全系列（qwen-max / qwen3.5-plus / qwen-plus / qwen-vl-max）
 - **数据库**: SQLite + SQLAlchemy（异步）+ Alembic 迁移
 - **认证**: JWT
 - **流式**: SSE (Server-Sent Events)
 - **状态管理**: LangGraph Checkpointer (InMemorySaver)
+- **可观测性**: Langfuse（可选，追踪每次 Agent 调用链路）
 
 ### 前端
 - **框架**: React 19 + TypeScript + Vite + Tailwind CSS
@@ -168,12 +203,13 @@ Ling-Agent/
 ├── agent-service/              # FastAPI 后端服务
 │   ├── app/
 │   │   ├── agent/
+│   │   │   ├── agents/         # 子 Agent 注册表（supervisor + 5 专业 Agent）
 │   │   │   ├── data/scales/    # 心理量表数据（GAD-7, PHQ-9, MBTI 等）
-│   │   │   ├── infra/          # LLM 工厂、Agent 工厂
-│   │   │   ├── prompts/        # 系统提示词（通用版 + 心理健康版）
+│   │   │   ├── infra/          # LLM 工厂、Agent 工厂、Prompt Cache 中间件
+│   │   │   ├── prompts/        # 各 Agent 系统提示词（supervisor/general/developer/psych/data/document）
 │   │   │   ├── skills/         # 12 个专业技能
-│   │   │   ├── service/        # agent_service.py 核心服务
-│   │   │   └── tools/          # 工具集（文件、代码、网络、健康、开发）
+│   │   │   ├── service/        # agent_service.py 核心流式服务
+│   │   │   └── tools/          # 工具集（文件、代码、网络、健康、开发、记忆）
 │   │   ├── core/               # 配置、依赖注入、审批逻辑
 │   │   ├── crud/               # 数据库 CRUD
 │   │   ├── models/             # SQLAlchemy 模型
