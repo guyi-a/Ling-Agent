@@ -51,7 +51,7 @@ class _ChartInput(BaseModel):
             "图表类型: "
             "emotion_trend（情绪变化折线图）| "
             "assessment_trend（测评分数趋势图）| "
-            "body_stats（身体不适部位统计柱状图）"
+            "body_trend（身体不适程度趋势折线图）"
         )
     )
     days: int = Field(default=30, description="时间范围，默认30天")
@@ -66,7 +66,7 @@ class GenerateHealthChartTool(BaseTool):
         "支持三种类型: "
         "emotion_trend（情绪变化折线图，展示情绪强度随日期变化）、"
         "assessment_trend（测评分数趋势图，展示 PHQ-9/GAD-7 等量表分数随时间变化）、"
-        "body_stats（身体不适部位统计柱状图）。"
+        "body_trend（身体不适程度趋势折线图，展示各部位不适程度随日期变化）。"
         "返回 HTML 文件的相对路径，用户可从工作区下载或在浏览器中打开。"
         "需要先有健康日记或测评数据才能生成图表。"
     )
@@ -93,7 +93,7 @@ class GenerateHealthChartTool(BaseTool):
         handlers = {
             "emotion_trend": self._emotion_trend,
             "assessment_trend": self._assessment_trend,
-            "body_stats": self._body_stats,
+            "body_trend": self._body_trend,
         }
         handler = handlers.get(chart_type)
         if not handler:
@@ -243,43 +243,57 @@ class GenerateHealthChartTool(BaseTool):
         rel_path = self._save_html(fig, "assessment_trend")
         return f"测评分数趋势图已生成: {rel_path}"
 
-    # ── 身体不适部位统计 ──
+    # ── 身体不适程度趋势折线图 ──
 
-    async def _body_stats(self, days: int) -> str:
+    async def _body_trend(self, days: int) -> str:
         import plotly.graph_objects as go
 
         from app.crud.health import health_record_crud
         db = await _get_db()
         try:
-            stats = await health_record_crud.get_stats(db, self.current_user_id, days)
+            records = await health_record_crud.get_by_user(
+                db, self.current_user_id, record_type="body", days=days, limit=500
+            )
         finally:
             await db.close()
 
-        body_part_stats = stats.get("body_part_stats", [])
-        if not body_part_stats:
-            return f"最近 {days} 天没有身体不适记录，无法生成统计图。请先在心理日记中记录一些身体不适数据。"
+        if not records:
+            return f"最近 {days} 天没有身体不适记录，无法生成趋势图。请先记录一些身体不适数据。"
 
-        sorted_stats = sorted(body_part_stats, key=lambda x: x["count"])
-        parts = [s["part"] for s in sorted_stats]
-        counts = [s["count"] for s in sorted_stats]
-        colors = [WARM_COLORS[i % len(WARM_COLORS)] for i in range(len(parts))]
+        parts_data: dict[str, dict] = {}
+        for r in sorted(records, key=lambda x: x.created_at):
+            part = r.body_part or "未指定"
+            if part not in parts_data:
+                parts_data[part] = {"dates": [], "levels": [], "notes": []}
+            parts_data[part]["dates"].append(r.created_at)
+            parts_data[part]["levels"].append(r.discomfort_level or 5)
+            parts_data[part]["notes"].append(r.notes or "")
 
-        fig = go.Figure(go.Bar(
-            x=counts, y=parts,
-            orientation="h",
-            marker=dict(color=colors, line=dict(width=0)),
-            text=counts,
-            textposition="outside",
-            hovertemplate="<b>%{y}</b><br>记录次数: %{x}<extra></extra>",
-        ))
+        fig = go.Figure()
+        for i, (part, data) in enumerate(parts_data.items()):
+            color = WARM_COLORS[i % len(WARM_COLORS)]
+            hover = [
+                f"<b>{part}</b><br>日期: {d.strftime('%Y-%m-%d %H:%M')}<br>不适程度: {lv}/10"
+                + (f"<br>备注: {n}" if n else "")
+                for d, lv, n in zip(data["dates"], data["levels"], data["notes"])
+            ]
+            fig.add_trace(go.Scatter(
+                x=data["dates"], y=data["levels"],
+                mode="lines+markers", name=part,
+                line=dict(color=color, width=2.5),
+                marker=dict(size=8, color=color, symbol="diamond"),
+                hovertemplate="%{customdata}<extra></extra>",
+                customdata=hover,
+            ))
 
         fig.update_layout(
             **_BASE_LAYOUT,
-            title=dict(text=f"最近 {days} 天身体不适部位统计", font=dict(size=16, color=TEXT_COLOR)),
-            xaxis=dict(**PLOTLY_LAYOUT["xaxis"], title="记录次数", dtick=1),
-            yaxis=dict(**PLOTLY_LAYOUT["yaxis"], title=""),
-            bargap=0.4,
+            title=dict(text=f"最近 {days} 天身体不适程度趋势", font=dict(size=16, color=TEXT_COLOR)),
+            xaxis=dict(**PLOTLY_LAYOUT["xaxis"], title="日期", tickformat="%m/%d"),
+            yaxis=dict(**PLOTLY_LAYOUT["yaxis"], title="不适程度", range=[0, 11],
+                       tickvals=list(range(0, 12))),
+            hovermode="closest",
         )
 
-        rel_path = self._save_html(fig, "body_stats")
-        return f"身体不适统计图已生成: {rel_path}"
+        rel_path = self._save_html(fig, "body_trend")
+        return f"身体不适趋势图已生成: {rel_path}"

@@ -622,7 +622,7 @@ Always be concise and direct in your responses."""
                                     details = details or {}
                                 cache_read = details.get("cache_read", 0) or 0
                                 cache_creation = details.get("cache_creation", 0) or 0
-                                last_input_tokens = input_tokens
+                                last_input_tokens = max(last_input_tokens, input_tokens)
                                 logger.info(
                                     f"📊 Token 用量 | input: {input_tokens}, output: {output_tokens}, "
                                     f"cache_hit: {cache_read}, cache_creation: {cache_creation}"
