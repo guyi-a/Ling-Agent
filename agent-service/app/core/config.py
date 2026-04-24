@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "qwen3.5-plus"  # 最新最强模型
     LLM_MODEL_ROUTER: str = "qwen-max"  # 路由 Agent
     LLM_MODEL_DEVELOPER: str = "qwen3.5-plus"  # 开发者 Agent：最强代码能力
-    LLM_MODEL_GENERAL: str = "qwen-plus"  # 通用 Agent：性价比均衡
+    LLM_MODEL_GENERAL: str = "qwen3.5-plus"  # 通用 Agent：性价比均衡
     LLM_MODEL_PSYCH: str = "qwen-plus"  # 心理健康 Agent
     LLM_MODEL_DATA: str = "qwen-plus"  # 数据分析 Agent
     LLM_MODEL_DOCUMENT: str = "qwen-plus"  # 文档处理 Agent

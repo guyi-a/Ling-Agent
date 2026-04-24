@@ -23,8 +23,10 @@ import os
 _AGENT_MODE = os.environ.get("AGENT_MODE", "supervisor").lower()
 
 
-def _is_handoff_tool(name: str) -> bool:
+def _is_handoff_tool(name: Optional[str]) -> bool:
     """判断是否为 handoff 内部工具（transfer_to_* / transfer_back_to_*）"""
+    if not name:
+        return False
     return name.startswith("transfer_to_") or name.startswith("transfer_back_to_")
 
 logger = logging.getLogger(__name__)
@@ -528,6 +530,9 @@ Always be concise and direct in your responses."""
         executed_ids: List[str] = []           # 已收到 on_tool_start 的 id
         last_round_saved_as_tool_call = False
         last_handoff_to: Optional[str] = None  # 最后一次 "to" handoff 的目标 agent
+        prev_handoff_to: Optional[str] = None  # 上一次 handoff 目标，用于检测连续重复
+        sub_agent_responded = False  # 子 agent 已回复，抑制 supervisor 后续文本
+        current_node: Optional[str] = None  # 当前正在运行的 langgraph 节点
 
         # 当前运行的输入（首次是消息列表，resume 时是 Command）
         run_input = {"messages": messages}
@@ -540,18 +545,24 @@ Always be concise and direct in your responses."""
                     kind = event.get("event", "")
 
                     if kind == "on_chat_model_start":
+                        node = event.get("metadata", {}).get("langgraph_node", "")
+                        current_node = node
                         # 如果 sub-agent 刚回来，supervisor 再次启动 → 发出 "back" handoff 徽章
                         if last_handoff_to is not None:
-                            node = event.get("metadata", {}).get("langgraph_node", "")
-                            if node == "supervisor":
+                            if node in ("agent", "supervisor"):
                                 yield {"type": "handoff", "to": last_handoff_to, "direction": "back"}
                                 last_handoff_to = None
+                        if node not in ("agent", "supervisor"):
+                            sub_agent_responded = True
                         current_round_text = ""
                         tc_chunks = {}
                         announced_tc_idxs = set()
                         yield {"type": "model_start"}
 
                     elif kind == "on_chat_model_stream":
+                        # 子 agent 已回复后，supervisor 的文本输出是多余的（常含幻觉内容）
+                        if sub_agent_responded and current_node in ("agent", "supervisor"):
+                            continue
                         chunk = event.get("data", {}).get("chunk")
                         if not chunk:
                             continue
@@ -646,6 +657,10 @@ Always be concise and direct in your responses."""
                             target = tool_name.replace("transfer_to_", "").replace("transfer_back_to_", "")
                             direction = "to" if tool_name.startswith("transfer_to_") else "back"
                             if direction == "to":
+                                if target == prev_handoff_to:
+                                    logger.warning(f"Supervisor 连续 handoff 到 {target}，终止循环")
+                                    break
+                                prev_handoff_to = target
                                 last_handoff_to = target
                             logger.info(f"Handoff {direction} → {target}")
                             # 持久化 handoff 到 DB，刷新后可从历史还原

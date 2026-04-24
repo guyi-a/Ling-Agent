@@ -155,6 +155,7 @@ export default memo(function MarkdownRenderer({ content }: MarkdownRendererProps
         thead: Thead,
         th: Th,
         td: Td,
+        img: () => null,
       }}
     >
       {content}
