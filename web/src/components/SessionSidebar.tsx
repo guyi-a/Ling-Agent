@@ -157,9 +157,9 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
   }
 
   return (
-    <div className="w-64 bg-[#fefcf3] dark:bg-gray-800 border-r border-[#e0d5c3] dark:border-gray-700 flex flex-col">
+    <div className="w-64 bg-white dark:bg-[#0f0f15] border-r border-gray-200 dark:border-gray-800 flex flex-col">
       {/* Header */}
-      <div className="p-3 space-y-0.5 border-b border-[#e0d5c3] dark:border-gray-700">
+      <div className="p-3 space-y-0.5 border-b border-gray-200 dark:border-gray-800">
         <button
           onClick={handleNewChat}
           className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
@@ -250,8 +250,8 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
                         onClick={() => onSelectSession(session.session_id)}
                         className={`group px-3 py-2 rounded-lg cursor-pointer transition-all ${
                           currentSessionId === session.session_id
-                            ? 'bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-900/30 dark:to-accent-900/30 gradient-border gradient-shadow-sm'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                            ? 'bg-gray-100 dark:bg-gray-800 border-l-2 border-l-primary-500'
+                            : 'hover:bg-gray-100 dark:hover:bg-white/[0.04]'
                         }`}
                       >
                         {editingId === session.session_id ? (

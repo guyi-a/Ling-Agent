@@ -8,7 +8,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 import os
 from contextlib import asynccontextmanager
 from app.core.config import settings
@@ -158,11 +157,6 @@ app.include_router(workspace_router)
 app.include_router(dev_router)
 app.include_router(preview_router)
 app.include_router(health_router)
-
-# 挂载前端静态文件
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
-if os.path.exists(frontend_dir):
-    app.mount("/ui", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 # 根路径
 @app.get("/")

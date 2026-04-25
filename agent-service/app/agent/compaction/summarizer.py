@@ -46,7 +46,7 @@ def _get_compact_llm() -> ChatOpenAI:
         timeout=30,
         max_retries=1,
         base_url=settings.LLM_BASE_URL,
-        api_key=settings.DASHSCOPE_API_KEY,
+        api_key=settings.LLM_API_KEY,
         model=settings.COMPACT_MODEL,
     )
 

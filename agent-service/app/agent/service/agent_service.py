@@ -248,18 +248,8 @@ Always be concise and direct in your responses."""
 
         messages = []
 
-        # 在消息列表头部注入系统提示词（带 cache_control 标记，启用 DashScope prompt caching）
         if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"}
-                    }
-                ]
-            })
+            messages.append({"role": "system", "content": system_prompt})
 
         # 添加历史消息（如果有），转换为多模态格式
         # 排除最后一条 user 消息（即当前消息，会在后面单独添加并带 cache_control）
@@ -350,8 +340,7 @@ Always be concise and direct in your responses."""
         # 构建基础文本内容
         text_content = msg.get("content", "")
 
-        # 收集图片附件（用于多模态）
-        image_parts = []
+        # 收集文件引用
         file_references = []
 
         workspace_root = Path(settings.WORKSPACE_ROOT).resolve()
@@ -362,32 +351,19 @@ Always be concise and direct in your responses."""
             full_path = workspace_root / session_id / att_path
 
             if att_type == "image":
-                # 图片：转换为 base64 并加载到多模态消息
+                # 图片：OCR 提取文字后嵌入消息文本
                 if full_path.exists():
                     try:
-                        import base64
-                        import mimetypes
-
-                        # 读取图片并转为 base64
-                        image_data = full_path.read_bytes()
-                        base64_image = base64.b64encode(image_data).decode('utf-8')
-
-                        # 获取 MIME 类型
-                        mime_type, _ = mimetypes.guess_type(str(full_path))
-                        if not mime_type or not mime_type.startswith('image/'):
-                            mime_type = 'image/png'  # 默认
-
-                        # 构建 data URL
-                        data_url = f"data:{mime_type};base64,{base64_image}"
-
-                        image_parts.append({
-                            "type": "image_url",
-                            "image_url": {"url": data_url}
-                        })
-                        logger.info(f"📸 加载图片到多模态消息 (base64): {att_path}")
+                        from app.agent.infra.ocr import extract_text_from_image
+                        ocr_text = extract_text_from_image(str(full_path))
+                        if ocr_text:
+                            text_content += f"\n\n[图片 OCR 识别结果 - {att_path}]:\n{ocr_text}"
+                        else:
+                            text_content += f"\n\n[图片 {att_path} 未识别到文字内容]"
+                        logger.info(f"📸 OCR 识别完成: {att_path}")
                     except Exception as e:
-                        logger.error(f"❌ 加载图片失败 {att_path}: {e}")
-                        text_content += f"\n\n[Error: Failed to load image: {att_path}]"
+                        logger.error(f"❌ OCR 识别失败 {att_path}: {e}")
+                        text_content += f"\n\n[Error: OCR failed for {att_path}]"
                 else:
                     logger.warning(f"⚠️  图片不存在: {full_path}")
                     text_content += f"\n\n[Warning: Referenced image not found: {att_path}]"
@@ -412,14 +388,8 @@ Always be concise and direct in your responses."""
             text_content += "\n\nYou can use `read_file` tool to read their contents if needed."
 
         # 更新 content 字段
-        if image_parts:
-            # 有图片：使用多模态格式
-            content_parts = [{"type": "text", "text": text_content}]
-            content_parts.extend(image_parts)
-            result["content"] = content_parts
-        else:
-            # 仅文件引用：返回纯文本
-            result["content"] = text_content
+        # 统一返回纯文本格式
+        result["content"] = text_content
 
         return result
 
@@ -625,7 +595,7 @@ Always be concise and direct in your responses."""
                                 last_input_tokens = max(last_input_tokens, input_tokens)
                                 logger.info(
                                     f"📊 Token 用量 | input: {input_tokens}, output: {output_tokens}, "
-                                    f"cache_hit: {cache_read}, cache_creation: {cache_creation}"
+                                    f"cache_hit: {cache_read}"
                                 )
 
                         if tc_chunks:

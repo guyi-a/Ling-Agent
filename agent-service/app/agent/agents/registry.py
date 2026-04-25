@@ -20,7 +20,6 @@ from app.agent.tools.registry import (
 )
 from app.core.approval import HIGH_RISK_TOOLS
 from app.core.config import settings
-from app.agent.infra.cache_middleware import PromptCacheMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,6 @@ def create_sub_agents() -> List[Pregel]:
     agents = []
     interrupt_on = _build_interrupt_on()
     checkpointer = get_checkpointer()
-    cache_mw = PromptCacheMiddleware()
 
     # 通用助手
     general_llm = get_llm(settings.LLM_MODEL_GENERAL)
@@ -55,7 +53,7 @@ def create_sub_agents() -> List[Pregel]:
         name="general",
         system_prompt=_load_prompt("general_prompt.md"),
         checkpointer=checkpointer,
-        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on), cache_mw],
+        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on)],
     )
     agents.append(general)
     logger.info("Sub-agent 'general' created (%d tools, model=%s)", len(general_tools), settings.LLM_MODEL_GENERAL)
@@ -69,7 +67,7 @@ def create_sub_agents() -> List[Pregel]:
         name="developer",
         system_prompt=_load_prompt("developer_prompt.md"),
         checkpointer=checkpointer,
-        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on), cache_mw],
+        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on)],
     )
     agents.append(developer)
     logger.info("Sub-agent 'developer' created (%d tools, model=%s)", len(developer_tools), settings.LLM_MODEL_DEVELOPER)
@@ -83,7 +81,7 @@ def create_sub_agents() -> List[Pregel]:
         name="psych",
         system_prompt=_load_prompt("psych_prompt.md"),
         checkpointer=checkpointer,
-        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on), cache_mw],
+        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on)],
     )
     agents.append(psych)
     logger.info("Sub-agent 'psych' created (%d tools, model=%s)", len(psych_tools), settings.LLM_MODEL_PSYCH)
@@ -97,7 +95,7 @@ def create_sub_agents() -> List[Pregel]:
         name="data",
         system_prompt=_load_prompt("data_prompt.md"),
         checkpointer=checkpointer,
-        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on), cache_mw],
+        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on)],
     )
     agents.append(data)
     logger.info("Sub-agent 'data' created (%d tools, model=%s)", len(data_tools), settings.LLM_MODEL_DATA)
@@ -111,7 +109,7 @@ def create_sub_agents() -> List[Pregel]:
         name="document",
         system_prompt=_load_prompt("document_prompt.md"),
         checkpointer=checkpointer,
-        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on), cache_mw],
+        middleware=[HumanInTheLoopMiddleware(interrupt_on=interrupt_on)],
     )
     agents.append(document)
     logger.info("Sub-agent 'document' created (%d tools, model=%s)", len(document_tools), settings.LLM_MODEL_DOCUMENT)

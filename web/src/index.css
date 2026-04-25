@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -148,9 +150,9 @@
   .notebook-page {
     --lh: 32px;
     --pt: 24px;
-    --line-color: #e8dcc8;
-    --paper-color: #fefcf3;
-    --margin-color: #f0b8b8;
+    --line-color: #e8e4df;
+    --paper-color: #fdfcfa;
+    --margin-color: #e0b4b4;
     /* 横线偏移：让文字居中在两条横线之间
        行高32px，padding-top 24px
        第一行文字中心 = 24 + 16 = 40
@@ -176,9 +178,9 @@
   }
 
   .dark .notebook-page {
-    --paper-color: #1e1e24;
-    --line-color: #2a2a32;
-    --margin-color: #5a3a3a;
+    --paper-color: #111115;
+    --line-color: #1c1a1f;
+    --margin-color: #4a2c2c;
   }
 
   /* 左页：红色竖线在右侧 */
@@ -264,15 +266,15 @@
   /* 整本书的阴影 */
   .notebook-shadow {
     box-shadow:
-      0 2px 4px rgba(0, 0, 0, 0.04),
-      0 8px 24px rgba(139, 115, 85, 0.12),
-      4px 14px 32px rgba(139, 115, 85, 0.1);
+      0 2px 4px rgba(0, 0, 0, 0.03),
+      0 8px 24px rgba(0, 0, 0, 0.06),
+      4px 14px 32px rgba(0, 0, 0, 0.04);
   }
 
   .dark .notebook-shadow {
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.3),
-      0 8px 32px rgba(0, 0, 0, 0.5);
+      0 2px 8px rgba(0, 0, 0, 0.4),
+      0 8px 32px rgba(0, 0, 0, 0.6);
   }
 
   /* 日记卡片入场动画 */

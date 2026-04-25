@@ -2,36 +2,51 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Play, Square, RotateCw, Terminal, Globe,
-  ExternalLink, Box, X,
+  ExternalLink, X, Sun, Moon, Radio, Cpu,
 } from 'lucide-react'
+import Logo from '@/components/Logo'
+import { useThemeStore } from '@/stores/themeStore'
 import { devApi } from '@/api/dev'
 import type { DevApp } from '@/types'
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'running') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-        Running
-      </span>
-    )
-  }
+function StatusIndicator({ status }: { status: string }) {
+  const running = status === 'running'
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-      Stopped
+    <span className="relative flex items-center gap-1.5">
+      <span className={`relative w-2 h-2 rounded-full ${running ? 'bg-emerald-400' : 'bg-gray-400 dark:bg-gray-600'}`}>
+        {running && (
+          <>
+            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-40" />
+            <span className="absolute -inset-1 rounded-full bg-emerald-400/20 animate-pulse" />
+          </>
+        )}
+      </span>
+      <span className={`text-[11px] font-semibold tracking-wider uppercase fd ${
+        running ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-600'
+      }`}>
+        {running ? 'Live' : 'Off'}
+      </span>
+    </span>
+  )
+}
+
+function PortBadge({ port }: { port: number | null }) {
+  if (!port) return null
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/[0.04] text-[11px] font-mono text-gray-500 dark:text-gray-400 tabular-nums">
+      :{port}
     </span>
   )
 }
 
 function SkeletonCard() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700" />
+    <div className="rounded-2xl border border-gray-100 dark:border-gray-800/60 bg-white dark:bg-white/[0.02] p-5 animate-pulse">
+      <div className="flex items-center gap-4">
+        <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-gray-800" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
-          <div className="h-3 bg-gray-100 dark:bg-gray-700/60 rounded w-1/2" />
+          <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-1/3" />
+          <div className="h-3 bg-gray-50 dark:bg-gray-800/60 rounded w-2/3" />
         </div>
       </div>
     </div>
@@ -40,6 +55,7 @@ function SkeletonCard() {
 
 export default function AppsPage() {
   const navigate = useNavigate()
+  const { isDark, toggleTheme } = useThemeStore()
   const [apps, setApps] = useState<DevApp[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedLogs, setExpandedLogs] = useState<string | null>(null)
@@ -111,7 +127,6 @@ export default function AppsPage() {
     }
   }
 
-  // 按会话分组
   const grouped = apps.reduce<Record<string, { title: string; apps: DevApp[] }>>((acc, app) => {
     if (!acc[app.session_id]) {
       acc[app.session_id] = { title: app.session_title, apps: [] }
@@ -121,130 +136,250 @@ export default function AppsPage() {
   }, {})
 
   const runningCount = apps.filter((a) => a.status === 'running').length
+  const totalCount = apps.length
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* 顶栏 */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#09090f]">
+      <style>{`
+        .fd{font-family:'Outfit',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}
+        @keyframes card-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes terminal-blink{0%,100%{opacity:1}50%{opacity:0}}
+        .anim-card{animation:card-up .45s cubic-bezier(.22,1,.36,1) both}
+        .anim-d1{animation-delay:.05s}
+        .anim-d2{animation-delay:.1s}
+        .anim-d3{animation-delay:.15s}
+        .anim-d4{animation-delay:.2s}
+        .term-cursor::after{content:'_';animation:terminal-blink 1s step-end infinite;color:#4ade80}
+        .log-line{counter-increment:line}
+        .log-line::before{content:counter(line);display:inline-block;width:2.5em;text-align:right;margin-right:1em;color:#4b5563;user-select:none;font-size:10px}
+        .log-wrap{counter-reset:line}
+        .glow-ring{box-shadow:0 0 0 1px rgba(16,185,129,0.1),0 0 20px -4px rgba(16,185,129,0.15)}
+        .dark .glow-ring{box-shadow:0 0 0 1px rgba(52,211,153,0.08),0 0 24px -4px rgba(52,211,153,0.1)}
+        .action-btn{transition:all .15s cubic-bezier(.22,1,.36,1)}
+        .action-btn:hover{transform:translateY(-1px)}
+        .action-btn:active{transform:translateY(0) scale(0.95)}
+      `}</style>
+
+      {/* ─── Header ─── */}
+      <div className="sticky top-0 z-10 border-b border-gray-200/80 dark:border-gray-800/80 bg-white/70 dark:bg-[#0f0f15]/70 backdrop-blur-xl">
+        <div className="px-6 h-16 flex items-center gap-3">
           <button
             onClick={() => navigate('/chat')}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex-1">
-            应用管理
-          </h1>
-          {runningCount > 0 && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {runningCount} 个运行中
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-1 fd">
+            <Logo size={24} />
+            <h1 className="text-base font-semibold text-gray-900 dark:text-gray-100">应用管理</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            {totalCount > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 dark:bg-white/[0.04]">
+                <Radio className={`w-3 h-3 ${runningCount > 0 ? 'text-emerald-500' : 'text-gray-400'}`} />
+                <span className="text-xs text-gray-500 dark:text-gray-400 fd tabular-nums">
+                  <span className={`font-semibold ${runningCount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`}>{runningCount}</span>
+                  <span className="mx-0.5">/</span>
+                  {totalCount}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+            >
+              {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+
+        {/* ─── 状态总览面板 ─── */}
+        {!loading && apps.length > 0 && (
+          <div className="anim-card relative overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800/60 bg-white dark:bg-white/[0.02]">
+            {/* 网格背景 */}
+            <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04]" style={{
+              backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+            }} />
+            {/* 渐变氛围 */}
+            {runningCount > 0 && (
+              <div className="absolute top-0 right-0 w-64 h-64 -translate-y-1/2 translate-x-1/4 rounded-full bg-emerald-400/[0.06] dark:bg-emerald-400/[0.03] blur-3xl" />
+            )}
+
+            <div className="relative px-6 py-6 flex items-center gap-8">
+              {/* 主指标 — 运行数 */}
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
+                  runningCount > 0
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40'
+                    : 'bg-gray-100 dark:bg-gray-800/50'
+                }`}>
+                  <Radio className={`w-6 h-6 ${runningCount > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-600'}`} />
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-gray-900 dark:text-gray-50 fd tabular-nums leading-none">
+                    {runningCount}
+                  </div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 fd">运行中</div>
+                </div>
+              </div>
+
+              <div className="w-px h-10 bg-gray-200 dark:bg-gray-800" />
+
+              {/* 总进程 */}
+              <div className="text-center">
+                <div className="text-xl font-bold text-gray-900 dark:text-gray-100 fd tabular-nums">{totalCount}</div>
+                <div className="text-[11px] text-gray-400 dark:text-gray-500 fd">总进程</div>
+              </div>
+
+              <div className="w-px h-10 bg-gray-200 dark:bg-gray-800" />
+
+              {/* 会话数 */}
+              <div className="text-center">
+                <div className="text-xl font-bold text-gray-900 dark:text-gray-100 fd tabular-nums">{Object.keys(grouped).length}</div>
+                <div className="text-[11px] text-gray-400 dark:text-gray-500 fd">会话</div>
+              </div>
+
+              <div className="w-px h-10 bg-gray-200 dark:bg-gray-800" />
+
+              {/* 端口列表 */}
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] text-gray-400 dark:text-gray-500 fd mb-1.5">活跃端口</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {apps.filter(a => a.status === 'running' && a.port).map(a => (
+                    <a
+                      key={a.port}
+                      href={`http://localhost:${a.port}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                      :{a.port}
+                    </a>
+                  ))}
+                  {apps.filter(a => a.status === 'running' && a.port).length === 0 && (
+                    <span className="text-[11px] text-gray-300 dark:text-gray-600 font-mono">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 加载态 */}
         {loading && (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <SkeletonCard key={i} />
-            ))}
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         )}
 
         {/* 空状态 */}
         {!loading && apps.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-              <Box className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+          <div className="text-center py-24">
+            <div className="relative inline-block mb-6">
+              <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-white/[0.03] border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+                <Cpu className="w-8 h-8 text-gray-300 dark:text-gray-700" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-600" />
+              </div>
             </div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">还没有运行中的应用</p>
-            <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+            <p className="text-gray-400 dark:text-gray-500 text-sm fd">还没有运行中的应用</p>
+            <p className="text-gray-300 dark:text-gray-600 text-xs mt-1">
               在对话中让 Agent 启动一个项目试试
             </p>
           </div>
         )}
 
-        {/* 按会话分组的应用列表 */}
+        {/* ─── 按会话分组 ─── */}
         {!loading &&
-          Object.entries(grouped).map(([sessionId, { title, apps: sessionApps }]) => (
-            <div key={sessionId}>
-              <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
-                <span className="truncate max-w-xs">{title}</span>
-                <span className="text-gray-300 dark:text-gray-600">
+          Object.entries(grouped).map(([sessionId, { title, apps: sessionApps }], gi) => (
+            <div key={sessionId} className={`anim-card ${gi === 0 ? 'anim-d1' : gi === 1 ? 'anim-d2' : 'anim-d3'}`}>
+              {/* 会话标题 */}
+              <div className="flex items-center gap-3 mb-3 px-1">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 truncate fd font-medium">{title}</p>
+                </div>
+                <span className="text-[11px] text-gray-400 dark:text-gray-600 fd tabular-nums flex-shrink-0">
                   {sessionApps.length} 个进程
                 </span>
-              </h2>
+              </div>
+
+              {/* 进程列表 */}
               <div className="space-y-3">
                 {sessionApps.map((app) => {
                   const key = `${app.session_id}/${app.name}`
                   const isExpanded = expandedLogs === key
                   const isActionLoading = actionLoading === key
+                  const isRunning = app.status === 'running'
 
                   return (
                     <div
                       key={key}
-                      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition-colors cursor-pointer"
+                      className={`rounded-2xl border overflow-hidden transition-all duration-300 ${
+                        isRunning
+                          ? 'bg-white dark:bg-white/[0.02] border-emerald-200/60 dark:border-emerald-900/30 glow-ring'
+                          : 'bg-white dark:bg-white/[0.015] border-gray-100 dark:border-gray-800/60'
+                      } ${!isExpanded ? 'hover:shadow-lg hover:-translate-y-0.5' : 'shadow-lg'} cursor-pointer`}
                       onClick={() => navigate(`/chat?session=${app.session_id}`)}
                     >
-                      {/* 卡片主体 */}
-                      <div className="px-4 py-3">
-                        <div className="flex items-center gap-3">
+                      <div className="px-5 py-4">
+                        <div className="flex items-center gap-4">
                           {/* 图标 */}
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            app.status === 'running'
-                              ? 'bg-green-50 dark:bg-green-900/20'
-                              : 'bg-gray-100 dark:bg-gray-700'
+                          <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isRunning
+                              ? 'bg-emerald-50 dark:bg-emerald-950/30'
+                              : 'bg-gray-50 dark:bg-gray-800/50'
                           }`}>
-                            <Globe className={`w-5 h-5 ${
-                              app.status === 'running'
-                                ? 'text-green-600 dark:text-green-400'
-                                : 'text-gray-400 dark:text-gray-500'
+                            <Globe className={`w-5 h-5 transition-colors ${
+                              isRunning
+                                ? 'text-emerald-500 dark:text-emerald-400'
+                                : 'text-gray-400 dark:text-gray-600'
                             }`} />
+                            {isRunning && (
+                              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white dark:border-[#09090f]" />
+                            )}
                           </div>
 
                           {/* 信息 */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 fd truncate">
                                 {app.name}
                               </span>
-                              <StatusBadge status={app.status} />
+                              <StatusIndicator status={app.status} />
+                              <PortBadge port={app.port} />
                             </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              {app.port && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  :{app.port}
-                                </span>
-                              )}
-                              <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                                {app.command.join(' ')}
-                              </span>
-                            </div>
+                            <p className="text-xs text-gray-400 dark:text-gray-600 truncate mt-1 font-mono">
+                              {app.command.join(' ')}
+                            </p>
                           </div>
 
                           {/* 操作按钮 */}
                           <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {app.status === 'running' && app.port && (
+                            {isRunning && app.port && (
                               <a
                                 href={`http://localhost:${app.port}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                                className="action-btn p-2.5 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
                                 title="在浏览器中打开"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <ExternalLink className="w-4 h-4" />
                               </a>
                             )}
-                            {app.status === 'running' ? (
+                            {isRunning ? (
                               <>
                                 <button
                                   onClick={() => handleRestart(app)}
                                   disabled={isActionLoading}
-                                  className="p-2 text-gray-500 hover:text-amber-600 dark:text-gray-400 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                  className="action-btn p-2.5 text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-colors disabled:opacity-40"
                                   title="重启"
                                 >
                                   <RotateCw className={`w-4 h-4 ${isActionLoading ? 'animate-spin' : ''}`} />
@@ -252,7 +387,7 @@ export default function AppsPage() {
                                 <button
                                   onClick={() => handleStop(app)}
                                   disabled={isActionLoading}
-                                  className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                  className="action-btn p-2.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors disabled:opacity-40"
                                   title="停止"
                                 >
                                   <Square className="w-4 h-4" />
@@ -262,7 +397,7 @@ export default function AppsPage() {
                               <button
                                 onClick={() => handleRestart(app)}
                                 disabled={isActionLoading}
-                                className="p-2 text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                className="action-btn p-2.5 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors disabled:opacity-40"
                                 title="启动"
                               >
                                 <Play className={`w-4 h-4 ${isActionLoading ? 'animate-spin' : ''}`} />
@@ -270,10 +405,10 @@ export default function AppsPage() {
                             )}
                             <button
                               onClick={() => toggleLogs(app)}
-                              className={`p-2 rounded-lg transition-colors ${
+                              className={`action-btn p-2.5 rounded-xl transition-colors ${
                                 isExpanded
-                                  ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
-                                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                               }`}
                               title="查看日志"
                             >
@@ -283,29 +418,40 @@ export default function AppsPage() {
                         </div>
                       </div>
 
-                      {/* 日志展开区域 */}
+                      {/* ─── 终端日志 ─── */}
                       {isExpanded && (
-                        <div className="border-t border-gray-200 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800/50">
-                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                              日志输出
-                            </span>
+                        <div className="border-t border-gray-100 dark:border-gray-800/60" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-between px-5 py-2 bg-gray-50/80 dark:bg-black/20">
+                            <div className="flex items-center gap-2">
+                              <div className="flex gap-1">
+                                <span className="w-2 h-2 rounded-full bg-red-400/60" />
+                                <span className="w-2 h-2 rounded-full bg-amber-400/60" />
+                                <span className="w-2 h-2 rounded-full bg-emerald-400/60" />
+                              </div>
+                              <span className="text-[11px] font-mono text-gray-400 dark:text-gray-500">
+                                {app.name} — logs
+                              </span>
+                            </div>
                             <button
                               onClick={() => { setExpandedLogs(null); setLogs([]) }}
-                              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
+                              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <div className="max-h-64 overflow-y-auto bg-gray-900 dark:bg-gray-950">
+                          <div className="max-h-72 overflow-y-auto bg-[#0d1117] dark:bg-[#060609]">
                             {logsLoading ? (
-                              <div className="px-4 py-3 text-xs text-gray-400">加载中...</div>
+                              <div className="px-5 py-4 text-xs text-gray-500 font-mono term-cursor">Loading</div>
                             ) : logs.length === 0 ? (
-                              <div className="px-4 py-3 text-xs text-gray-500">暂无日志</div>
+                              <div className="px-5 py-4 text-xs text-gray-600 font-mono">No output yet.</div>
                             ) : (
-                              <pre className="px-4 py-3 text-xs text-gray-300 font-mono leading-5">
-                                {logs.join('\n')}
-                              </pre>
+                              <div className="px-5 py-3 log-wrap">
+                                {logs.map((line, i) => (
+                                  <div key={i} className="log-line text-[12px] leading-5 font-mono text-gray-300 hover:bg-white/[0.02] -mx-2 px-2 rounded">
+                                    {line || ' '}
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -317,11 +463,14 @@ export default function AppsPage() {
             </div>
           ))}
 
-        {/* 统计 */}
+        {/* 页脚统计 */}
         {!loading && apps.length > 0 && (
-          <p className="text-center text-xs text-gray-400 dark:text-gray-600 pt-2">
-            共 {apps.length} 个进程，{runningCount} 个运行中
-          </p>
+          <div className="flex items-center justify-center gap-1.5 pt-2">
+            <Logo size={14} className="opacity-20" />
+            <p className="text-xs text-gray-300 dark:text-gray-700 fd">
+              共 {apps.length} 个进程，{runningCount} 个运行中
+            </p>
+          </div>
         )}
       </div>
     </div>

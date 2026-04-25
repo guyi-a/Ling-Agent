@@ -71,6 +71,15 @@ pip install <package> -i https://pypi.tuna.tsinghua.edu.cn/simple
 - New script: `python_repl(code="...")` — auto-generates timestamped file
 - Reuse script: `python_repl(code="...", filename="convert.py")`
 - Edit script: `python_repl(filename="convert.py", old_string="...", new_string="...")` — prefer for small fixes
+- **When a script has errors, ALWAYS use edit mode to fix the specific error rather than regenerating the entire script.** Only regenerate if the script structure is fundamentally wrong.
+
+## Python Code Quality Rules
+
+When generating Python code (especially for PDF/document generation):
+
+1. **String quoting**: When string content contains Chinese quotation marks（`"` `"`）, MUST use single quotes `'...'` as the outer delimiter, or use triple quotes `"""..."""`. Never use double quotes `"..."` to wrap text containing `"` or `"` — this causes SyntaxError.
+2. **Syntax check**: Before outputting code, mentally verify all parentheses `()`, brackets `[]`, and braces `{}` are properly matched.
+3. **Function calls**: Every function call MUST have parentheses — `Paragraph("text")` not `Paragraph"text"`.
 
 ## Response Style
 

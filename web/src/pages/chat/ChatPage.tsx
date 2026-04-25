@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { MessageSquare, Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Search } from 'lucide-react'
+import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Search } from 'lucide-react'
+import Logo from '@/components/Logo'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -627,7 +628,7 @@ export default function ChatPage() {
   }, [])
 
   return (
-    <div className="h-screen flex bg-[#f5f0e8] dark:bg-gray-900">
+    <div className="h-screen flex bg-gray-50 dark:bg-[#09090f]">
       {/* Left Sidebar - Sessions */}
       <SessionSidebar
         currentSessionId={selectedSessionId ?? currentSessionId}
@@ -638,31 +639,29 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="border-b border-[#e0d5c3] dark:border-gray-700 p-4 bg-[#fefcf3]/80 dark:bg-gray-800 backdrop-blur">
+        <header className="border-b border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#0f0f15]/80 backdrop-blur">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-accent-600 flex items-center justify-center shadow-lg flex-shrink-0">
-                <MessageSquare className="w-5 h-5 text-white" />
-              </div>
-              <h1 className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
-                {sessionTitle || 'Ling-Agent'}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Logo size={26} className="flex-shrink-0" />
+              <h1 className="text-base font-medium text-gray-900 dark:text-gray-100 truncate" style={{ fontFamily: "'Outfit',system-ui,sans-serif" }}>
+                {sessionTitle || <span className="tracking-widest">ing</span>}
               </h1>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSearchOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors border border-gray-200 dark:border-gray-600"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors border border-gray-200 dark:border-gray-700/60"
                 title="全局搜索 (⌘K)"
               >
                 <Search className="w-4 h-4" />
                 <span className="hidden sm:inline text-xs">搜索</span>
-                <kbd className="hidden sm:inline-flex items-center px-1 py-0.5 text-[10px] font-medium text-gray-400 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 ml-1">
+                <kbd className="hidden sm:inline-flex items-center px-1 py-0.5 text-[10px] font-medium text-gray-400 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-gray-700/60 ml-1">
                   ⌘K
                 </kbd>
               </button>
               <button
                 onClick={toggleTheme}
-                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
                 title={isDark ? '切换到浅色模式' : '切换到深色模式'}
               >
                 {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -691,19 +690,12 @@ export default function ChatPage() {
 
         {/* Messages — 预览时隐藏 */}
         <main className={`${previewUrl ? 'hidden' : 'flex-1'} overflow-y-auto p-4 relative`}>
-          {/* 浮动气泡背景 */}
-          <div className="floating-bubbles">
-            <div className="bubble"></div>
-            <div className="bubble"></div>
-            <div className="bubble"></div>
-            <div className="bubble"></div>
-            <div className="bubble"></div>
-          </div>
-
           <div className="max-w-4xl mx-auto space-y-4 relative z-10">
             {messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 py-16">
-                <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                <div className="mx-auto mb-4 opacity-15">
+                  <Logo size={56} />
+                </div>
                 <p className="mb-8">开始与 AI 助手对话</p>
                 <div className="grid grid-cols-2 gap-3 max-w-2xl mx-auto">
                   {[
@@ -722,17 +714,17 @@ export default function ChatPage() {
                       '做一个个人记账本，能记录收支、按分类统计、显示月度图表',
                       '帮我做一个天气仪表盘，展示实时天气、温度趋势和空气质量',
                     ]},
-                    { icon: '📊', title: '分析数据', cases: [
-                      '帮我分析上传的 CSV 数据，生成可视化图表和分析报告',
-                      '帮我清洗数据，去除重复值和异常值，输出数据质量报告',
-                      '帮我做一个销售数据的月度趋势分析，找出增长和下滑的关键原因',
+                    { icon: '🧠', title: '身心健康', cases: [
+                      '我今天头有点疼，心情也不太好，帮我记录一下健康日记',
+                      '帮我做一个心理健康自评，看看我的焦虑和压力水平',
+                      '帮我生成最近的身心健康趋势图表，看看身体和情绪的变化',
                     ]},
                   ].map((item) => {
                     const isExpanded = expandedSuggestion === item.title
                     return (
                       <div
                         key={item.title}
-                        className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm overflow-hidden flex flex-col"
+                        className="rounded-xl border border-gray-100 dark:border-gray-800/80 bg-white dark:bg-white/[0.02] overflow-hidden flex flex-col hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-md transition-all"
                       >
                         {/* Header: icon + title + expand toggle */}
                         <div
@@ -779,8 +771,8 @@ export default function ChatPage() {
                   <div
                     className={`group relative max-w-[95%] px-4 py-3 rounded-xl ${
                       msg.role === 'user'
-                        ? 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                        : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                        : 'bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100'
                     }`}
                   >
                     {msg.role === 'user' ? (
@@ -1055,7 +1047,7 @@ export default function ChatPage() {
         </main>
 
         {/* Input */}
-        <footer className="border-t border-[#e0d5c3] dark:border-gray-700 p-4 bg-[#fefcf3]/80 dark:bg-gray-800 backdrop-blur">
+        <footer className="border-t border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#0f0f15]/80 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             {/* 附件和粘贴图片预览区 */}
             {(selectedFiles.length > 0 || pastedImages.length > 0) && (
@@ -1104,12 +1096,12 @@ export default function ChatPage() {
                 onPaste={handlePaste}
                 placeholder="发消息与 AI 助手对话...（支持粘贴图片）"
                 disabled={isStreaming}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700/80 rounded-xl bg-white dark:bg-white/[0.03] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-400 dark:focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               />
               <button
                 onClick={handleSend}
                 disabled={(!message.trim() && pastedImages.filter(p => p.uploadedPath).length === 0) || isStreaming}
-                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-600 text-white rounded-lg hover:from-primary-600 hover:to-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                className="px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 <Send className="w-5 h-5" />
               </button>

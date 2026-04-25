@@ -13,16 +13,16 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./app.db"
 
-    # LLM Configuration
-    DASHSCOPE_API_KEY: Optional[str] = None
-    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL: str = "qwen3.5-plus"  # 最新最强模型
-    LLM_MODEL_ROUTER: str = "qwen-max"  # 路由 Agent
-    LLM_MODEL_DEVELOPER: str = "qwen3.5-plus"  # 开发者 Agent：最强代码能力
-    LLM_MODEL_GENERAL: str = "qwen3.5-plus"  # 通用 Agent：性价比均衡
-    LLM_MODEL_PSYCH: str = "qwen-plus"  # 心理健康 Agent
-    LLM_MODEL_DATA: str = "qwen-plus"  # 数据分析 Agent
-    LLM_MODEL_DOCUMENT: str = "qwen-plus"  # 文档处理 Agent
+    # LLM Configuration (智谱 GLM)
+    LLM_API_KEY: Optional[str] = None
+    LLM_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+    LLM_MODEL: str = "glm-4.7"
+    LLM_MODEL_ROUTER: str = "glm-4.7"
+    LLM_MODEL_DEVELOPER: str = "glm-4.7"
+    LLM_MODEL_GENERAL: str = "glm-4.7"
+    LLM_MODEL_PSYCH: str = "glm-4.7"
+    LLM_MODEL_DATA: str = "glm-4.7"
+    LLM_MODEL_DOCUMENT: str = "glm-4.7"
 
     # Workspace Configuration
     WORKSPACE_ROOT: str = "./workspace"
@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     RAG_ENABLED: bool = True
     RAG_INDEX_DIR: str = "data/vector_store"
     RAG_KNOWLEDGE_DIR: str = "data/knowledge_base"
+    RAG_API_KEY: Optional[str] = None
+    RAG_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     RAG_EMBEDDING_MODEL: str = "text-embedding-v3"
     RAG_CHUNK_SIZE: int = 500
     RAG_CHUNK_OVERLAP: int = 100
@@ -61,7 +63,7 @@ class Settings(BaseSettings):
     COMPACT_ENABLED: bool = True
     COMPACT_TOKEN_THRESHOLD: int = 30000
     COMPACT_KEEP_TURNS: int = 2
-    COMPACT_MODEL: str = "qwen-turbo"
+    COMPACT_MODEL: str = "glm-4.7"
     COMPACT_SUMMARY_MAX_TOKENS: int = 1500
 
     # JWT Configuration

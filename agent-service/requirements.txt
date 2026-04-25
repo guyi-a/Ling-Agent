@@ -59,3 +59,6 @@ langchain-text-splitters>=0.2.0  # Document chunking
 # MCP (Model Context Protocol)
 langchain-mcp-adapters>=0.1.0  # LangChain ↔ MCP bridge
 mcp>=1.0.0                     # MCP Python SDK
+
+# OCR (image text extraction)
+rapidocr-onnxruntime>=1.4.0

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import apiClient from '@/api/client'
 import LoginPage from '@/pages/home/LoginPage'
+import LandingPage from '@/pages/home/LandingPage'
 import ChatPage from '@/pages/chat/ChatPage'
 import SessionsPage from '@/pages/sessions/SessionsPage'
 import ProfilePage from '@/pages/profile/ProfilePage'
@@ -111,7 +112,7 @@ function App() {
               </PrivateRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="/" element={<LandingPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

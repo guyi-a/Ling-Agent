@@ -19,8 +19,8 @@ def get_llm(model: str = None) -> Optional[ChatOpenAI]:
     Returns:
         LLM实例，如果配置不完整则返回None
     """
-    if not settings.DASHSCOPE_API_KEY:
-        logger.warning("DASHSCOPE_API_KEY 未配置，LLM功能将不可用")
+    if not settings.LLM_API_KEY:
+        logger.warning("LLM_API_KEY 未配置，LLM功能将不可用")
         return None
 
     if not settings.LLM_BASE_URL:
@@ -36,7 +36,7 @@ def get_llm(model: str = None) -> Optional[ChatOpenAI]:
             timeout=None,
             max_retries=2,
             base_url=settings.LLM_BASE_URL,
-            api_key=settings.DASHSCOPE_API_KEY,
+            api_key=settings.LLM_API_KEY,
             model=model_name,
             stream_usage=True,
         )
