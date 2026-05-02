@@ -28,7 +28,11 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 def _load_prompt(filename: str) -> str:
     path = _PROMPTS_DIR / filename
-    return path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    import platform
+    os_name = platform.system()
+    text += f"\n\n## Platform\nCurrent OS: {os_name}. Use platform-appropriate paths and commands (e.g. on Windows use backslash paths and .venv\\\\Scripts\\\\python).\n"
+    return text
 
 
 def _build_interrupt_on() -> dict:

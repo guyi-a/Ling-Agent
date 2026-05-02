@@ -9,6 +9,7 @@ Dev Services 工具 — Agent 可调用的后台进程管理接口
 """
 
 import shlex
+import platform
 import logging
 from pathlib import Path
 from typing import Optional, Type
@@ -86,7 +87,7 @@ class DevRunTool(BaseTool):
         else:
             work_path = workspace
 
-        cmd_list = shlex.split(command)
+        cmd_list = shlex.split(command, posix=(platform.system() != "Windows"))
         if not cmd_list:
             return "Error: empty command"
 

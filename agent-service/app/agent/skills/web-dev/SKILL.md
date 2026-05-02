@@ -71,7 +71,7 @@ outputs/projects/{app-name}/
    - Frontend pages and components
    - Frontend-to-API mapping (which page calls which endpoint)
    This ensures frontend and backend paths stay in sync. **Do NOT write any code before PLAN.md is done.**
-2. **Build backend** — write `main.py` + `routes.py` + `requirements.txt` → create venv if needed → install deps → `dev_run` → verify with `dev_logs`. **Do NOT write any frontend files before backend is created and working.**
+2. **Build backend** — write `main.py` + `routes.py` + `requirements.txt` → **MUST create venv and install deps BEFORE dev_run** (see "Virtual Environment" section below) → `dev_run` with `.venv\Scripts\python` (Windows) or `.venv/bin/python` (macOS/Linux), NEVER bare `python` → verify with `dev_logs`. **Do NOT write any frontend files before backend is created and working.**
 3. **Curl-test ALL API endpoints** — this step is **MANDATORY**, do NOT skip it. After the server starts successfully, use `run_command` to curl every endpoint in PLAN.md. See the "API Self-Testing" section below for details.
 4. **Build frontend** — write `index.html` (+ CSS/JS). Follow PLAN.md to ensure `fetch()` calls match API routes exactly.
 5. **Start preview** — tell the user: "点击项目卡片上的预览按钮（眼睛图标）查看效果"
@@ -209,13 +209,26 @@ If logs show errors, fix the code and `dev_restart`.
 
 ### Virtual Environment (when dependencies beyond stdlib are needed)
 
+**Windows:**
 ```
-run_command("cd outputs/projects/{app-name} && python -m venv .venv && .venv/bin/pip install -r requirements.txt")
+run_command("cd outputs/projects/{app-name} && python -m venv .venv && .venv\\Scripts\\python -m pip install -r requirements.txt")
+```
+
+**macOS / Linux:**
+```
+run_command("cd outputs/projects/{app-name} && python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt")
 ```
 
 Then start with venv Python:
+
+**Windows:**
 ```
-dev_run(name="{app-name}-server", command=".venv/bin/uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
+dev_run(name="{app-name}-server", command=".venv\\Scripts\\python -m uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
+```
+
+**macOS / Linux:**
+```
+dev_run(name="{app-name}-server", command=".venv/bin/python -m uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
 ```
 
 ## API Self-Testing (MANDATORY)
@@ -515,7 +528,7 @@ Semantic colors: `bg-base-100/200/300`, `text-base-content`, `text-primary/secon
 - All files must be written under `outputs/projects/{app-name}/`
 - Do not hardcode ports — let ProcessManager detect from command args
 - Do not use `sleep` loops for periodic tasks
-- `run_command` is for one-off commands (pip install, curl), NOT for running servers. Max 120s timeout.
+- **CRITICAL**: `run_command` is for one-off commands (pip install, curl) ONLY. NEVER use `run_command` to start servers — it blocks and times out. ALWAYS use `dev_run` to start servers. Max 120s timeout.
 - Always verify service startup with `dev_logs` before telling the user to preview
 
 ## Common Pitfalls
@@ -542,3 +555,4 @@ Semantic colors: `bg-base-100/200/300`, `text-base-content`, `text-primary/secon
 | **前端不检查 res.ok** | 后端返回 4xx/5xx 但前端当成功处理。**必须检查** `if (!res.ok)` 并读 `err.detail` |
 | **修改代码后忘记重启** | `edit_file` 改代码后必须 `dev_restart`，否则旧代码还在跑 |
 | **curl 测试不带 -s** | 不加 `-s` 会输出进度条干扰 JSON 解析，**始终用** `curl -s` |
+| **curl URL 含中文/非 ASCII** | Windows curl 不自动编码 → "Invalid HTTP request"。**必须** URL-encode：`北京` → `%E5%8C%97%E4%BA%AC`。用 `python -c "from urllib.parse import quote; print(quote('北京'))"` 生成编码 |

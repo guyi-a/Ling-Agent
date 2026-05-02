@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import apiClient from '@/api/client'
 import LoginPage from '@/pages/home/LoginPage'
 import LandingPage from '@/pages/home/LandingPage'
@@ -26,6 +27,8 @@ function App() {
   const { isAuthenticated, clearAuth } = useAuthStore()
   const [authChecked, setAuthChecked] = useState(false)
 
+  const loadSettings = useSettingsStore(s => s.load)
+
   // 启动时验证 token 有效性
   useEffect(() => {
     if (!isAuthenticated) {
@@ -33,7 +36,10 @@ function App() {
       return
     }
     apiClient.get('/api/users/me')
-      .then(() => setAuthChecked(true))
+      .then(() => {
+        setAuthChecked(true)
+        loadSettings()
+      })
       .catch((err) => {
         if (err.response?.status === 401) clearAuth()
         setAuthChecked(true)

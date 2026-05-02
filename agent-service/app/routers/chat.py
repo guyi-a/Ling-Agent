@@ -10,12 +10,13 @@ from pydantic import BaseModel, Field
 from typing import Optional, AsyncIterator, List, Dict, Any
 import logging
 
-from app.core.approval import resolve_approval
+from app.core.approval import resolve_approval, add_to_allowlist
 
 from app.database.session import get_db, AsyncSessionLocal
 from app.crud.session import session_crud
 from app.crud.message import message_crud
 from app.crud.user import user_crud
+
 from app.schemas.message import MessageCreate
 from app.agent.service.agent_service import get_agent_service
 from app.agent.service.event_buffer import stream_buffers
@@ -330,12 +331,15 @@ async def resume_stream(
 class ApprovalRequest(BaseModel):
     request_id: str
     approved: bool
+    always_allow: bool = False
+    tool_name: Optional[str] = None
 
 
 @router.post("/approve")
 async def approve_tool(
     body: ApprovalRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """工具审批接口：前端用户点击允许/拒绝后调用"""
     found = resolve_approval(body.request_id, body.approved)
@@ -344,6 +348,19 @@ async def approve_tool(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="审批请求不存在或已超时"
         )
+
+    if body.approved and body.always_allow and body.tool_name:
+        import json
+        existing = {}
+        if current_user.preferences:
+            try:
+                existing = json.loads(current_user.preferences)
+            except (json.JSONDecodeError, TypeError):
+                existing = {}
+        new_prefs = add_to_allowlist(existing, body.tool_name)
+        from app.schemas.user import UserUpdate
+        await user_crud.update(db, current_user.user_id, UserUpdate(preferences=new_prefs))
+
     return {"status": "ok", "approved": body.approved}
 
 

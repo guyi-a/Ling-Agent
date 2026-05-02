@@ -41,7 +41,7 @@ function PortBadge({ port }: { port: number | null }) {
 
 function SkeletonCard() {
   return (
-    <div className="rounded-2xl border border-gray-100 dark:border-gray-800/60 bg-white dark:bg-white/[0.02] p-5 animate-pulse">
+    <div className="rounded-2xl border border-gray-100 dark:border-gray-800/60 bg-white dark:bg-white/[0.05] p-5 animate-pulse">
       <div className="flex items-center gap-4">
         <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-gray-800" />
         <div className="flex-1 space-y-2">
@@ -139,7 +139,7 @@ export default function AppsPage() {
   const totalCount = apps.length
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#09090f]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1a1a24]">
       <style>{`
         .fd{font-family:'Outfit',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}
         @keyframes card-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -161,7 +161,7 @@ export default function AppsPage() {
       `}</style>
 
       {/* ─── Header ─── */}
-      <div className="sticky top-0 z-10 border-b border-gray-200/80 dark:border-gray-800/80 bg-white/70 dark:bg-[#0f0f15]/70 backdrop-blur-xl">
+      <div className="sticky top-0 z-10 border-b border-gray-200/80 dark:border-gray-800/80 bg-white/70 dark:bg-[#22222e]/70 backdrop-blur-xl">
         <div className="px-6 h-16 flex items-center gap-3">
           <button
             onClick={() => navigate('/chat')}
@@ -198,7 +198,7 @@ export default function AppsPage() {
 
         {/* ─── 状态总览面板 ─── */}
         {!loading && apps.length > 0 && (
-          <div className="anim-card relative overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800/60 bg-white dark:bg-white/[0.02]">
+          <div className="anim-card relative overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800/60 bg-white dark:bg-white/[0.05]">
             {/* 网格背景 */}
             <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04]" style={{
               backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
@@ -282,7 +282,7 @@ export default function AppsPage() {
         {!loading && apps.length === 0 && (
           <div className="text-center py-24">
             <div className="relative inline-block mb-6">
-              <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-white/[0.03] border border-gray-200 dark:border-gray-800 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-white/[0.06] border border-gray-200 dark:border-gray-800 flex items-center justify-center">
                 <Cpu className="w-8 h-8 text-gray-300 dark:text-gray-700" />
               </div>
               <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center">
@@ -323,7 +323,7 @@ export default function AppsPage() {
                       key={key}
                       className={`rounded-2xl border overflow-hidden transition-all duration-300 ${
                         isRunning
-                          ? 'bg-white dark:bg-white/[0.02] border-emerald-200/60 dark:border-emerald-900/30 glow-ring'
+                          ? 'bg-white dark:bg-white/[0.05] border-emerald-200/60 dark:border-emerald-900/30 glow-ring'
                           : 'bg-white dark:bg-white/[0.015] border-gray-100 dark:border-gray-800/60'
                       } ${!isExpanded ? 'hover:shadow-lg hover:-translate-y-0.5' : 'shadow-lg'} cursor-pointer`}
                       onClick={() => navigate(`/chat?session=${app.session_id}`)}

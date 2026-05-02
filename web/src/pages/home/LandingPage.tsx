@@ -80,7 +80,7 @@ export default function LandingPage() {
   useEffect(() => { setMounted(true) }, [])
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#09090f] text-gray-900 dark:text-gray-100 overflow-hidden">
+    <div className="min-h-screen bg-white dark:bg-[#1a1a24] text-gray-900 dark:text-gray-100 overflow-hidden">
       <style>{`
         .fd{font-family:'Outfit',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}
         .hero-mesh{
@@ -119,7 +119,7 @@ export default function LandingPage() {
       `}</style>
 
       {/* ── Nav ── */}
-      <nav className={`fixed top-0 inset-x-0 z-50 backdrop-blur-md bg-white/70 dark:bg-[#09090f]/70 transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+      <nav className={`fixed top-0 inset-x-0 z-50 backdrop-blur-md bg-white/70 dark:bg-[#1a1a24]/70 transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-1 fd">
             <Logo size={30} />
@@ -235,7 +235,7 @@ export default function LandingPage() {
             {features.map((f, i) => (
               <div
                 key={f.title}
-                className={`fc group relative p-7 rounded-2xl border border-gray-100 dark:border-gray-800/80 bg-white dark:bg-white/[0.02] hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-xl hover:shadow-gray-200/50 dark:hover:shadow-black/20 transition-all duration-700 ${feat.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+                className={`fc group relative p-7 rounded-2xl border border-gray-100 dark:border-gray-800/80 bg-white dark:bg-white/[0.05] hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-xl hover:shadow-gray-200/50 dark:hover:shadow-black/20 transition-all duration-700 ${feat.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
                 style={{ transitionDelay: feat.visible ? `${120 + i * 70}ms` : '0ms' }}
               >
                 <div className={`fi w-11 h-11 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-5 shadow-lg shadow-gray-200/50 dark:shadow-none`}>

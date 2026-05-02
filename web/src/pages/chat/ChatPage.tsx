@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Search } from 'lucide-react'
+import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Search, Ban, Shield, Zap, Wrench } from 'lucide-react'
 import Logo from '@/components/Logo'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -18,6 +18,7 @@ import MessageActions from '@/components/MessageActions'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import GlobalSearchModal from '@/components/GlobalSearchModal'
 import { useAuthStore } from '@/stores/authStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { chatApi } from '@/api/chat'
 import { messagesApi } from '@/api/messages'
 import { sessionsApi } from '@/api/sessions'
@@ -75,16 +76,24 @@ function ToolInputDisplay({ data, isDark }: { data: Record<string, any>; isDark:
       {entries.map(([key, value]) => {
         const display = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
         const lang = typeof value === 'string' ? guessLang(key, value) : 'json'
+        const isDiffField = key === 'old_string' || key === 'new_string'
+        const diffColor = key === 'old_string'
+          ? 'text-red-500 dark:text-red-400'
+          : key === 'new_string'
+            ? 'text-green-500 dark:text-green-400'
+            : 'text-gray-500 dark:text-gray-400'
         return (
           <div key={key}>
-            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono mb-0.5">{key}:</div>
-            <SyntaxHighlighter
-              style={isDark ? oneDark : oneLight}
-              language={lang}
-              customStyle={{ margin: 0, fontSize: '0.75rem', borderRadius: '0.375rem' }}
-            >
-              {display}
-            </SyntaxHighlighter>
+            <div className={`text-[11px] font-mono mb-0.5 ${diffColor}`}>{key}:</div>
+            <div className={isDiffField ? 'max-h-40 overflow-auto rounded' : ''}>
+              <SyntaxHighlighter
+                style={isDark ? oneDark : oneLight}
+                language={lang}
+                customStyle={{ margin: 0, fontSize: '0.75rem', borderRadius: '0.375rem' }}
+              >
+                {display}
+              </SyntaxHighlighter>
+            </div>
           </div>
         )
       })}
@@ -93,7 +102,8 @@ function ToolInputDisplay({ data, isDark }: { data: Record<string, any>; isDark:
 }
 
 export default function ChatPage() {
-  const [message, setMessage] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [sendDisabled, setSendDisabled] = useState(true)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [sessionTitle, setSessionTitle] = useState<string>('')
   const [selectedFiles, setSelectedFiles] = useState<WorkspaceFile[]>([])
@@ -106,11 +116,17 @@ export default function ChatPage() {
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null)
   const [pastedImages, setPastedImages] = useState<PastedImage[]>([])
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [approvalMenuOpen, setApprovalMenuOpen] = useState(false)
+  const approvalBtnRef = useRef<HTMLDivElement>(null)
+  const { approvalMode, setApprovalMode } = useSettingsStore()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null)
   const [deleteAfterDialogOpen, setDeleteAfterDialogOpen] = useState(false)
   const [deletingAfterMessageId, setDeletingAfterMessageId] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(256)
+  const [workspaceWidth, setWorkspaceWidth] = useState(320)
+  const [isDragging, setIsDragging] = useState<'left' | 'right' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, isStreaming, currentSessionId, setCurrentSessionId, sendMessage, stopStreaming, setMessages, reconnect } = useSSEChat()
   const [sidebarRefresh, setSidebarRefresh] = useState(0)
@@ -328,7 +344,8 @@ export default function ChatPage() {
   }, [])
 
   const handleSend = () => {
-    if (!message.trim() && pastedImages.filter(p => p.uploadedPath).length === 0) return
+    const message = inputRef.current?.value?.trim() || ''
+    if (!message && pastedImages.filter(p => p.uploadedPath).length === 0) return
     if (isStreaming) return
 
     // 构建 attachments 参数
@@ -374,9 +391,9 @@ export default function ChatPage() {
       selectedSessionId || undefined,
       allImageParts.length > 0 ? allImageParts : undefined
     )
-    setMessage('')
+    if (inputRef.current) inputRef.current.value = ''
+    setSendDisabled(true)
     setSelectedFiles([])
-    // 不 revoke 粘贴图片的 previewUrl — 需要留给消息气泡显示
     setPastedImages([])
   }
 
@@ -627,19 +644,61 @@ export default function ChatPage() {
     return () => document.removeEventListener('keydown', handler)
   }, [])
 
+  // 拖拽调整面板宽度
+  const handleResizeStart = useCallback((side: 'left' | 'right') => (e: ReactMouseEvent) => {
+    e.preventDefault()
+    setIsDragging(side)
+    const startX = e.clientX
+    const startWidth = side === 'left' ? sidebarWidth : workspaceWidth
+
+    const onMouseMove = (ev: globalThis.MouseEvent) => {
+      const delta = ev.clientX - startX
+      if (side === 'left') {
+        setSidebarWidth(Math.min(400, Math.max(200, startWidth + delta)))
+      } else {
+        setWorkspaceWidth(Math.min(500, Math.max(240, startWidth - delta)))
+      }
+    }
+
+    const onMouseUp = () => {
+      setIsDragging(null)
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [sidebarWidth, workspaceWidth])
+
   return (
-    <div className="h-screen flex bg-gray-50 dark:bg-[#09090f]">
+    <div className="h-screen flex bg-gray-50 dark:bg-[#1a1a24]">
+      {/* 拖拽时全局 overlay，防止 iframe 拦截和文本选中 */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50" style={{ cursor: 'col-resize' }} />
+      )}
+
       {/* Left Sidebar - Sessions */}
       <SessionSidebar
         currentSessionId={selectedSessionId ?? currentSessionId}
         onSelectSession={handleSessionSelect}
         refreshTrigger={sidebarRefresh}
+        style={{ width: sidebarWidth }}
       />
 
+      {/* 左侧拖拽手柄 */}
+      <div className="relative flex-shrink-0" style={{ width: 0 }}>
+        <div
+          onMouseDown={handleResizeStart('left')}
+          className="absolute inset-y-0 -left-[4px] w-[8px] cursor-col-resize z-10 group"
+        >
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] opacity-0 group-hover:opacity-100 bg-primary-400/50 transition-opacity" />
+        </div>
+      </div>
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="border-b border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#0f0f15]/80 backdrop-blur">
+        <header className="border-b border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#22222e]/80 backdrop-blur">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
               <Logo size={26} className="flex-shrink-0" />
@@ -724,7 +783,7 @@ export default function ChatPage() {
                     return (
                       <div
                         key={item.title}
-                        className="rounded-xl border border-gray-100 dark:border-gray-800/80 bg-white dark:bg-white/[0.02] overflow-hidden flex flex-col hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-md transition-all"
+                        className="rounded-xl border border-gray-100 dark:border-gray-800/80 bg-white dark:bg-white/[0.05] overflow-hidden flex flex-col hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-md transition-all"
                       >
                         {/* Header: icon + title + expand toggle */}
                         <div
@@ -740,7 +799,7 @@ export default function ChatPage() {
                         <div className="px-3 pb-3 space-y-1 flex-1 flex flex-col">
                           {/* First case — always visible */}
                           <button
-                            onClick={() => { setMessage(item.cases[0]); setExpandedSuggestion(null) }}
+                            onClick={() => { if (inputRef.current) { inputRef.current.value = item.cases[0]; setSendDisabled(false) }; setExpandedSuggestion(null) }}
                             className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-300 transition-colors leading-relaxed flex-1"
                           >
                             {item.cases[0]}
@@ -750,7 +809,7 @@ export default function ChatPage() {
                           {isExpanded && item.cases.slice(1).map((c) => (
                             <button
                               key={c}
-                              onClick={() => { setMessage(c); setExpandedSuggestion(null) }}
+                              onClick={() => { if (inputRef.current) { inputRef.current.value = c; setSendDisabled(false) }; setExpandedSuggestion(null) }}
                               className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-300 transition-colors leading-relaxed"
                             >
                               {c}
@@ -772,7 +831,7 @@ export default function ChatPage() {
                     className={`group relative max-w-[95%] px-4 py-3 rounded-xl ${
                       msg.role === 'user'
                         ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                        : 'bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100'
+                        : 'bg-white dark:bg-white/[0.06] border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100'
                     }`}
                   >
                     {msg.role === 'user' ? (
@@ -891,6 +950,9 @@ export default function ChatPage() {
                                     {part.toolStatus === 'rejected' && (
                                       <Clock className="w-4 h-4 text-orange-500" />
                                     )}
+                                    {part.toolStatus === 'cancelled' && (
+                                      <Ban className="w-4 h-4 text-gray-400" />
+                                    )}
                                     <span className="font-mono text-gray-700 dark:text-gray-300">
                                       {part.toolName}
                                     </span>
@@ -901,6 +963,7 @@ export default function ChatPage() {
                                           {part.toolStatus === 'pending' && '加载中...'}
                                           {part.toolStatus === 'done' && '加载完成'}
                                           {part.toolStatus === 'rejected' && '等待审批'}
+                                          {part.toolStatus === 'cancelled' && '已取消'}
                                         </>
                                       ) : (
                                         <>
@@ -908,6 +971,7 @@ export default function ChatPage() {
                                           {part.toolStatus === 'pending' && '执行中...'}
                                           {part.toolStatus === 'done' && '调用成功'}
                                           {part.toolStatus === 'rejected' && '等待审批'}
+                                          {part.toolStatus === 'cancelled' && '已取消'}
                                         </>
                                       )}
                                     </span>
@@ -920,7 +984,7 @@ export default function ChatPage() {
                                       {part.toolInput && Object.keys(part.toolInput).length > 0 && (
                                         <div className="mb-2">
                                           <div className="text-gray-400 dark:text-gray-500 mb-1 font-medium">输入</div>
-                                          <div className="max-h-60 overflow-auto rounded">
+                                          <div className="max-h-96 overflow-auto rounded">
                                             <ToolInputDisplay data={part.toolInput} isDark={isDark} />
                                           </div>
                                         </div>
@@ -983,6 +1047,7 @@ export default function ChatPage() {
                             requestId={msg.approvalRequest.requestId}
                             toolName={msg.approvalRequest.toolName}
                             toolInput={msg.approvalRequest.toolInput}
+                            disabled={!msg.isStreaming}
                             onComplete={() => {
                               setMessages((prev) =>
                                 prev.map((m) =>
@@ -1047,7 +1112,7 @@ export default function ChatPage() {
         </main>
 
         {/* Input */}
-        <footer className="border-t border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#0f0f15]/80 backdrop-blur">
+        <footer className="border-t border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#22222e]/80 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             {/* 附件和粘贴图片预览区 */}
             {(selectedFiles.length > 0 || pastedImages.length > 0) && (
@@ -1089,18 +1154,34 @@ export default function ChatPage() {
                 <Paperclip className="w-5 h-5" />
               </button>
               <input
+                ref={inputRef}
                 type="text"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => setSendDisabled(!e.target.value.trim())}
                 onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                 onPaste={handlePaste}
                 placeholder="发消息与 AI 助手对话...（支持粘贴图片）"
                 disabled={isStreaming}
-                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700/80 rounded-xl bg-white dark:bg-white/[0.03] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-400 dark:focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700/80 rounded-xl bg-white dark:bg-white/[0.06] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-400 dark:focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               />
+              {/* 审批模式快捷切换 */}
+              <div className="relative" ref={approvalBtnRef}>
+                <button
+                  onClick={() => setApprovalMenuOpen(!approvalMenuOpen)}
+                  className={`p-2.5 rounded-xl border transition-colors ${
+                    approvalMode === 'auto'
+                      ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+                      : approvalMode === 'custom'
+                        ? 'border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                  title={`审批模式: ${approvalMode === 'default' ? '默认' : approvalMode === 'auto' ? '自动' : '自定义'}`}
+                >
+                  {approvalMode === 'auto' ? <Zap className="w-5 h-5" /> : approvalMode === 'custom' ? <Wrench className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
+                </button>
+              </div>
               <button
                 onClick={handleSend}
-                disabled={(!message.trim() && pastedImages.filter(p => p.uploadedPath).length === 0) || isStreaming}
+                disabled={(sendDisabled && pastedImages.filter(p => p.uploadedPath).length === 0) || isStreaming}
                 className="px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 <Send className="w-5 h-5" />
@@ -1110,11 +1191,22 @@ export default function ChatPage() {
         </footer>
       </div>
 
+      {/* 右侧拖拽手柄 */}
+      <div className="relative flex-shrink-0" style={{ width: 0 }}>
+        <div
+          onMouseDown={handleResizeStart('right')}
+          className="absolute inset-y-0 -left-[4px] w-[8px] cursor-col-resize z-10 group"
+        >
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] opacity-0 group-hover:opacity-100 bg-primary-400/50 transition-opacity" />
+        </div>
+      </div>
+
       {/* Right Sidebar - Workspace */}
       <WorkspacePanel
         sessionId={selectedSessionId ?? currentSessionId}
         isStreaming={isStreaming}
         onOpenPreview={(url, title) => { setPreviewUrl(url); setPreviewTitle(title) }}
+        style={{ width: workspaceWidth }}
       />
 
       {/* File Selector Modal */}
@@ -1172,6 +1264,43 @@ export default function ChatPage() {
         onConfirm={confirmDeleteAfter}
         onCancel={() => { setDeleteAfterDialogOpen(false); setDeletingAfterMessageId(null) }}
       />
+
+      {/* 审批模式下拉菜单（fixed 定位避免被裁切） */}
+      {approvalMenuOpen && (
+        <>
+          <div className="fixed inset-0 z-[60]" onClick={() => setApprovalMenuOpen(false)} />
+          <div
+            className="fixed z-[70] w-44 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+            style={(() => {
+              const r = approvalBtnRef.current?.getBoundingClientRect()
+              if (!r) return {}
+              return { bottom: window.innerHeight - r.top + 6, right: window.innerWidth - r.right }
+            })()}
+          >
+            {([
+              { value: 'default' as const, icon: <Shield className="w-4 h-4" />, label: '默认', desc: '高危工具需审批' },
+              { value: 'auto' as const, icon: <Zap className="w-4 h-4" />, label: '自动', desc: '全部自动通过' },
+              { value: 'custom' as const, icon: <Wrench className="w-4 h-4" />, label: '自定义', desc: '在设置中配置' },
+            ]).map(m => (
+              <button
+                key={m.value}
+                onClick={() => { setApprovalMode(m.value); setApprovalMenuOpen(false) }}
+                className={`w-full px-3 py-2 flex items-center gap-2.5 text-left transition-colors ${
+                  approvalMode === m.value
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                {m.icon}
+                <div>
+                  <div className="text-sm font-medium">{m.label}</div>
+                  <div className="text-[11px] opacity-60">{m.desc}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* 全局搜索 */}
       <GlobalSearchModal

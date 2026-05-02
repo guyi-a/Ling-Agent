@@ -215,13 +215,23 @@ def start_process(
 
     try:
         with open(log_file, "w") as lf:
-            proc = subprocess.Popen(
-                command,
-                cwd=str(workdir),
-                stdout=lf,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            if platform.system() == "Windows":
+                proc = subprocess.Popen(
+                    command,
+                    cwd=str(workdir),
+                    stdout=lf,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                    shell=True,
+                )
+            else:
+                proc = subprocess.Popen(
+                    command,
+                    cwd=str(workdir),
+                    stdout=lf,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
     except Exception as e:
         release_port(allocated_port)
         raise RuntimeError(f"Failed to start process: {e}") from e
@@ -291,13 +301,23 @@ def restart_process(session_id: str, name: str) -> dict:
 
     try:
         with open(log_file, "w") as lf:
-            proc = subprocess.Popen(
-                command,
-                cwd=str(workdir),
-                stdout=lf,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            if platform.system() == "Windows":
+                proc = subprocess.Popen(
+                    command,
+                    cwd=str(workdir),
+                    stdout=lf,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                    shell=True,
+                )
+            else:
+                proc = subprocess.Popen(
+                    command,
+                    cwd=str(workdir),
+                    stdout=lf,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
     except Exception as e:
         raise RuntimeError(f"Failed to restart process: {e}") from e
 

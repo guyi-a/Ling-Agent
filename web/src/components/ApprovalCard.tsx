@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react'
-import { AlertTriangle, Check, X } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { AlertTriangle, Check, X, ShieldCheck } from 'lucide-react'
 import { chatApi } from '@/api/chat'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 interface ApprovalCardProps {
   requestId: string
   toolName: string
   toolInput: any
+  disabled?: boolean
   onComplete: () => void
 }
 
@@ -13,18 +15,30 @@ export default function ApprovalCard({
   requestId,
   toolName,
   toolInput,
+  disabled,
   onComplete,
 }: ApprovalCardProps) {
-  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected' | 'expired'>('pending')
+  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected' | 'expired' | 'always_allowed'>('pending')
 
-  const handleDecision = useCallback(async (approved: boolean) => {
+  useEffect(() => {
+    if (disabled && status === 'pending') {
+      setStatus('expired')
+    }
+  }, [disabled, status])
+  const addToAllowlist = useSettingsStore(s => s.addToAllowlist)
+  const approvalMode = useSettingsStore(s => s.approvalMode)
+
+  const handleDecision = useCallback(async (approved: boolean, alwaysAllow = false) => {
     if (status !== 'pending') return
 
-    // 先更新状态，防止重复点击
-    setStatus(approved ? 'approved' : 'rejected')
+    setStatus(approved ? (alwaysAllow ? 'always_allowed' : 'approved') : 'rejected')
 
     try {
-      await chatApi.approve(requestId, approved)
+      await chatApi.approve(requestId, approved, alwaysAllow, toolName)
+
+      if (approved && alwaysAllow) {
+        addToAllowlist(toolName)
+      }
 
       setTimeout(() => {
         onComplete()
@@ -32,7 +46,6 @@ export default function ApprovalCard({
     } catch (error: any) {
       console.error('审批请求失败:', error)
       if (error.response?.status === 404) {
-        // request_id 不存在（服务重启 / 已过期）
         setStatus('expired')
       } else {
         setStatus('rejected')
@@ -42,7 +55,7 @@ export default function ApprovalCard({
         onComplete()
       }, 1500)
     }
-  }, [status, requestId, onComplete])
+  }, [status, requestId, toolName, onComplete, addToAllowlist])
 
   const getToolLabel = (name: string) => {
     const map: Record<string, string> = {
@@ -71,6 +84,17 @@ export default function ApprovalCard({
     )
   }
 
+  if (status === 'always_allowed') {
+    return (
+      <div className="my-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+          <ShieldCheck className="w-4 h-4" />
+          <span className="text-sm font-medium">已允许（后续自动通过）</span>
+        </div>
+      </div>
+    )
+  }
+
   if (status === 'rejected') {
     return (
       <div className="my-3 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -87,7 +111,7 @@ export default function ApprovalCard({
       <div className="my-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
         <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <X className="w-4 h-4" />
-          <span className="text-sm font-medium">审批已失效（服务已重启或会话已结束）</span>
+          <span className="text-sm font-medium">审批已失效（生成已停止）</span>
         </div>
       </div>
     )
@@ -117,7 +141,7 @@ export default function ApprovalCard({
       <div className="flex gap-2">
         <button
           onClick={() => handleDecision(false)}
-          className="flex-1 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         >
           拒绝
         </button>
@@ -125,8 +149,17 @@ export default function ApprovalCard({
           onClick={() => handleDecision(true)}
           className="flex-1 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
         >
-          ✓ 允许
+          允许
         </button>
+        {approvalMode !== 'auto' && (
+          <button
+            onClick={() => handleDecision(true, true)}
+            className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-1"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            始终允许
+          </button>
+        )}
       </div>
     </div>
   )

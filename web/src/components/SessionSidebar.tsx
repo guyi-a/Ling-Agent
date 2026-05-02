@@ -12,6 +12,7 @@ interface SessionSidebarProps {
   onSelectSession: (sessionId: string | null) => void
   onSessionsChange?: () => void
   refreshTrigger?: number
+  style?: React.CSSProperties
 }
 
 // ─── 时间分组 ───
@@ -43,7 +44,7 @@ function groupSessions(sessions: Session[]): Map<TimeGroup, Session[]> {
   return groups
 }
 
-export default function SessionSidebar({ currentSessionId, onSelectSession, onSessionsChange, refreshTrigger }: SessionSidebarProps) {
+export default function SessionSidebar({ currentSessionId, onSelectSession, onSessionsChange, refreshTrigger, style }: SessionSidebarProps) {
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
@@ -157,7 +158,7 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
   }
 
   return (
-    <div className="w-64 bg-white dark:bg-[#0f0f15] border-r border-gray-200 dark:border-gray-800 flex flex-col">
+    <div className="bg-white dark:bg-[#22222e] border-r border-gray-200 dark:border-gray-800 flex flex-col flex-shrink-0" style={style}>
       {/* Header */}
       <div className="p-3 space-y-0.5 border-b border-gray-200 dark:border-gray-800">
         <button

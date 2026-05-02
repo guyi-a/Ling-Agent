@@ -2,11 +2,13 @@
 用户管理路由
 """
 import os
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 from app.database.session import get_db
 from app.crud.user import user_crud
@@ -29,6 +31,46 @@ async def get_current_user_profile(
 ):
     """获取当前登录用户信息（通过 JWT token）"""
     return current_user
+
+
+class PreferencesUpdate(BaseModel):
+    approval_mode: Optional[str] = Field(None, pattern=r"^(default|auto|custom)$")
+    tool_allowlist: Optional[List[str]] = None
+    tool_denylist: Optional[List[str]] = None
+
+
+@router.get("/me/preferences")
+async def get_preferences(
+    current_user: User = Depends(get_current_user),
+):
+    """获取当前用户的审批偏好"""
+    if current_user.preferences:
+        try:
+            return json.loads(current_user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {"approval_mode": "default", "tool_allowlist": [], "tool_denylist": []}
+
+
+@router.put("/me/preferences")
+async def update_preferences(
+    body: PreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新当前用户的审批偏好"""
+    existing = {}
+    if current_user.preferences:
+        try:
+            existing = json.loads(current_user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            existing = {}
+
+    update_data = body.model_dump(exclude_unset=True)
+    existing.update(update_data)
+
+    await user_crud.update(db, current_user.user_id, UserUpdate(preferences=existing))
+    return existing
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

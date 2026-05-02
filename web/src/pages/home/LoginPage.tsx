@@ -41,7 +41,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#09090f] relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#1a1a24] relative overflow-hidden">
       <style>{`
         .fd{font-family:'Outfit',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}
         .login-mesh{
@@ -111,7 +111,7 @@ export default function LoginPage() {
 
         {/* form */}
         <form onSubmit={handleSubmit} className="fu d1">
-          <div className="space-y-4 p-7 rounded-2xl border border-gray-100 dark:border-gray-800/80 bg-white/80 dark:bg-white/[0.03] backdrop-blur-sm shadow-xl shadow-gray-200/30 dark:shadow-black/20">
+          <div className="space-y-4 p-7 rounded-2xl border border-gray-100 dark:border-gray-800/80 bg-white/80 dark:bg-white/[0.06] backdrop-blur-sm shadow-xl shadow-gray-200/30 dark:shadow-black/20">
             <div>
               <label htmlFor="username" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 tracking-wide uppercase">
                 用户名

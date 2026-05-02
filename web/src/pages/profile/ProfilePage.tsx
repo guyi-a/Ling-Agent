@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Lock, CheckCircle, XCircle,
-  MessageSquare, CalendarDays, Pencil, ChevronDown, Camera, Sun, Moon,
-  Sparkles,
+  ArrowLeft, ArrowRight, Lock, CheckCircle, XCircle,
+  Camera, Sun, Moon, Sparkles,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_PALETTES, getDefaultPaletteId } from '@/stores/profileStore'
@@ -141,7 +140,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#09090f]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1a1a24]">
       <style>{`
         .fd{font-family:'Outfit',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}
         @keyframes float-in{from{opacity:0;transform:translateY(20px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
@@ -160,7 +159,7 @@ export default function ProfilePage() {
       `}</style>
 
       {/* 顶栏 — 半透明浮动 */}
-      <div className="fixed top-0 left-0 right-0 z-20 border-b border-gray-200/50 dark:border-gray-800/50 bg-white/60 dark:bg-[#0f0f15]/60 backdrop-blur-xl">
+      <div className="fixed top-0 left-0 right-0 z-20 border-b border-gray-200/50 dark:border-gray-800/50 bg-white/60 dark:bg-[#22222e]/60 backdrop-blur-xl">
         <div className="max-w-2xl mx-auto px-6 h-14 flex items-center gap-3">
           <button onClick={() => navigate('/chat')} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -255,7 +254,7 @@ export default function ProfilePage() {
       <div className="max-w-xl mx-auto px-6 -mt-2 pb-12 space-y-4">
 
         {/* 配色选择 — 核心交互，抬升可见性 */}
-        <div className={`bg-white dark:bg-white/[0.02] rounded-2xl border border-gray-100 dark:border-gray-800/60 p-5 ${mounted ? 'anim-d2' : 'opacity-0'}`}>
+        <div className={`bg-white dark:bg-white/[0.05] rounded-2xl border border-gray-100 dark:border-gray-800/60 p-5 ${mounted ? 'anim-d2' : 'opacity-0'}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-gray-300 dark:text-gray-600" />
@@ -284,7 +283,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 个人资料 */}
-        <div className={`bg-white dark:bg-white/[0.02] rounded-2xl border border-gray-100 dark:border-gray-800/60 overflow-hidden ${mounted ? 'anim-d3' : 'opacity-0'}`}>
+        <div className={`bg-white dark:bg-white/[0.05] rounded-2xl border border-gray-100 dark:border-gray-800/60 overflow-hidden ${mounted ? 'anim-d3' : 'opacity-0'}`}>
           <div className="px-5 py-3.5">
             <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider fd">个人资料</span>
           </div>
@@ -303,62 +302,86 @@ export default function ProfilePage() {
         </div>
 
         {/* 账号安全 */}
-        <div className={`bg-white dark:bg-white/[0.02] rounded-2xl border border-gray-100 dark:border-gray-800/60 overflow-hidden ${mounted ? 'anim-d4' : 'opacity-0'}`}>
+        <div className={`bg-white dark:bg-white/[0.05] rounded-2xl border border-gray-100 dark:border-gray-800/60 overflow-hidden ${mounted ? 'anim-d4' : 'opacity-0'}`}>
           <div className="px-5 py-3.5">
             <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider fd">账号安全</span>
           </div>
           <div className="border-t border-gray-100 dark:border-gray-800/60">
             <button
-              onClick={() => setShowPwForm(!showPwForm)}
+              onClick={() => { setShowPwForm(true); setPwMsg(null) }}
               className="w-full flex items-center justify-between px-5 py-4 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors"
             >
               <div className="flex items-center gap-2.5">
                 <Lock className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <span>修改密码</span>
               </div>
-              <ChevronDown className={`w-4 h-4 text-gray-300 dark:text-gray-600 transition-transform duration-300 ${showPwForm ? 'rotate-180' : ''}`} />
+              <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />
             </button>
           </div>
-
-          {showPwForm && (
-            <form onSubmit={handleChangePassword} className="px-5 pb-5 space-y-3 border-t border-gray-100 dark:border-gray-800/60 pt-4">
-              {(['当前密码', '新密码（至少 6 位）', '确认新密码'] as const).map((label, i) => {
-                const vals = [oldPassword, newPassword, confirmPassword]
-                const setters = [setOldPassword, setNewPassword, setConfirmPassword]
-                return (
-                  <div key={label}>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">{label}</label>
-                    <input
-                      type="password"
-                      value={vals[i]}
-                      onChange={(e) => setters[i](e.target.value)}
-                      required
-                      minLength={i === 1 ? 6 : undefined}
-                      className="w-full px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-white/[0.02] text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-900/10 dark:focus:ring-white/10 focus:border-gray-300 dark:focus:border-gray-600 transition"
-                    />
-                  </div>
-                )
-              })}
-              {pwMsg && (
-                <div className={`flex items-center gap-2 text-xs rounded-xl px-3 py-2.5 ${
-                  pwMsg.type === 'success'
-                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
-                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                }`}>
-                  {pwMsg.type === 'success' ? <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 flex-shrink-0" />}
-                  {pwMsg.text}
-                </div>
-              )}
-              <button
-                type="submit"
-                disabled={pwLoading || !oldPassword || !newPassword || !confirmPassword}
-                className="w-full py-2.5 text-sm bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-xl font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                {pwLoading ? '提交中...' : '确认修改'}
-              </button>
-            </form>
-          )}
         </div>
+
+        {/* 修改密码弹窗 */}
+        {showPwForm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowPwForm(false)}>
+            <div
+              className="relative w-full max-w-sm mx-6 p-6 rounded-2xl bg-white dark:bg-[#22222e] border border-gray-200 dark:border-gray-800 shadow-2xl fu"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => setShowPwForm(false)} className="absolute top-4 right-4 text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors text-lg">✕</button>
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-white/[0.08] flex items-center justify-center">
+                  <Lock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                </div>
+                <h3 className="text-base font-bold fd text-gray-900 dark:text-white">修改密码</h3>
+              </div>
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                {(['当前密码', '新密码（至少 6 位）', '确认新密码'] as const).map((label, i) => {
+                  const vals = [oldPassword, newPassword, confirmPassword]
+                  const setters = [setOldPassword, setNewPassword, setConfirmPassword]
+                  return (
+                    <div key={label}>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">{label}</label>
+                      <input
+                        type="password"
+                        value={vals[i]}
+                        onChange={(e) => setters[i](e.target.value)}
+                        required
+                        minLength={i === 1 ? 6 : undefined}
+                        className="w-full px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-white/[0.05] text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-900/10 dark:focus:ring-white/10 focus:border-gray-300 dark:focus:border-gray-600 transition"
+                      />
+                    </div>
+                  )
+                })}
+                {pwMsg && (
+                  <div className={`flex items-center gap-2 text-xs rounded-xl px-3 py-2.5 ${
+                    pwMsg.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                  }`}>
+                    {pwMsg.type === 'success' ? <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 flex-shrink-0" />}
+                    {pwMsg.text}
+                  </div>
+                )}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowPwForm(false)}
+                    className="flex-1 py-2.5 text-sm border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-white/[0.03] transition-all"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={pwLoading || !oldPassword || !newPassword || !confirmPassword}
+                    className="flex-1 py-2.5 text-sm bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-xl font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    {pwLoading ? '提交中...' : '确认修改'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* 页脚 */}
         <div className="flex items-center justify-center gap-1.5 pt-4">

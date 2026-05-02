@@ -95,3 +95,49 @@ def resolve_approval(request_id: str, approved: bool) -> bool:
 def pending_count() -> int:
     """当前待审批数量（调试用）"""
     return len(_pending_events)
+
+
+# ── 审批策略 ──────────────────────────────────────────
+
+def _parse_prefs(user_prefs: Optional[dict]) -> dict:
+    if not user_prefs:
+        return {"approval_mode": "default", "tool_allowlist": [], "tool_denylist": []}
+    return {
+        "approval_mode": user_prefs.get("approval_mode", "default"),
+        "tool_allowlist": user_prefs.get("tool_allowlist", []),
+        "tool_denylist": user_prefs.get("tool_denylist", []),
+    }
+
+
+def should_approve(tool_name: str, user_prefs: Optional[dict]) -> str:
+    """
+    决定某个工具是否需要审批。
+    返回 "ask" | "allow" | "deny"
+    """
+    prefs = _parse_prefs(user_prefs)
+    mode = prefs["approval_mode"]
+
+    if mode == "auto":
+        return "allow"
+
+    if mode == "custom":
+        if tool_name in prefs["tool_allowlist"]:
+            return "allow"
+        if tool_name in prefs["tool_denylist"]:
+            return "deny"
+        return "ask"
+
+    # default 模式
+    if tool_name in HIGH_RISK_TOOLS:
+        return "ask"
+    return "allow"
+
+
+def add_to_allowlist(user_prefs: Optional[dict], tool_name: str) -> dict:
+    """将工具加入 allowlist，返回更新后的 prefs dict。"""
+    prefs = _parse_prefs(user_prefs)
+    if tool_name not in prefs["tool_allowlist"]:
+        prefs["tool_allowlist"].append(tool_name)
+    if tool_name in prefs["tool_denylist"]:
+        prefs["tool_denylist"].remove(tool_name)
+    return prefs

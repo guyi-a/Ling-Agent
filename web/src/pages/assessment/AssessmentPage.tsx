@@ -190,9 +190,9 @@ export default function AssessmentPage() {
   const resultType = result?.result_type || 'severity'
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#09090f]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1a1a24]">
       {/* 顶栏 */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#0f0f15]/80 backdrop-blur-md">
+      <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#22222e]/80 backdrop-blur-md">
         <div className="px-6 h-16 flex items-center gap-3">
           <button onClick={() => activeScale ? exitAssessment() : navigate('/chat')} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -216,7 +216,7 @@ export default function AssessmentPage() {
             {loading ? (
               <div className="space-y-4">
                 {[1,2,3].map(i => (
-                  <div key={i} className="h-36 rounded-xl bg-gray-100 dark:bg-white/[0.03] animate-pulse" />
+                  <div key={i} className="h-36 rounded-xl bg-gray-100 dark:bg-white/[0.06] animate-pulse" />
                 ))}
               </div>
             ) : (
@@ -245,7 +245,7 @@ export default function AssessmentPage() {
                           return (
                             <div
                               key={s.name}
-                              className="bg-white dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-gray-800/80 p-5 flex flex-col hover:-translate-y-0.5 hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-md transition-all"
+                              className="bg-white dark:bg-white/[0.05] rounded-xl border border-gray-100 dark:border-gray-800/80 p-5 flex flex-col hover:-translate-y-0.5 hover:border-gray-200 dark:hover:border-gray-700 hover:shadow-md transition-all"
                             >
                               <div className="flex items-center gap-2 mb-2">
                                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">{s.title}</h3>
@@ -340,7 +340,7 @@ export default function AssessmentPage() {
             </div>
 
             {/* 题目 */}
-            <div className="bg-white dark:bg-white/[0.02] rounded-2xl border border-gray-100 dark:border-gray-800/80 p-6">
+            <div className="bg-white dark:bg-white/[0.05] rounded-2xl border border-gray-100 dark:border-gray-800/80 p-6">
               <p className="text-base text-gray-900 dark:text-gray-100 mb-6 font-medium">{question.text}</p>
               <div className="space-y-2.5">
                 {question.options.map((opt, i) => (
@@ -394,7 +394,7 @@ export default function AssessmentPage() {
         {/* ══ 结果 ══ */}
         {result && (
           <div className="mt-4">
-            <div className="bg-white dark:bg-white/[0.02] rounded-2xl border border-gray-100 dark:border-gray-800/80 p-8 text-center">
+            <div className="bg-white dark:bg-white/[0.05] rounded-2xl border border-gray-100 dark:border-gray-800/80 p-8 text-center">
 
               {resultType === 'severity' && (
                 <>

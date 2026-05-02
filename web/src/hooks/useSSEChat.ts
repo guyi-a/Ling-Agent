@@ -6,7 +6,7 @@ export interface MessagePart {
   content?: string  // for text
   imageUrl?: string  // for image (preview URL or workspace path)
   toolName?: string  // for tool
-  toolStatus?: 'generating' | 'pending' | 'done' | 'rejected'  // for tool
+  toolStatus?: 'generating' | 'pending' | 'done' | 'rejected' | 'cancelled'  // for tool
   isSkill?: boolean  // Skill 工具标记
   toolInput?: any    // 工具输入参数
   toolOutput?: string // 工具输出结果
@@ -291,7 +291,7 @@ export function useSSEChat() {
 
                 const parts = msg.parts.map(part => {
                   if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
-                    return { ...part, toolStatus: 'done' as const }
+                    return { ...part, toolStatus: 'cancelled' as const }
                   }
                   return part
                 })
@@ -303,7 +303,6 @@ export function useSSEChat() {
                 return {
                   ...msg,
                   isStreaming: false,
-                  approvalRequest: undefined,
                   parts
                 }
               })
@@ -328,40 +327,52 @@ export function useSSEChat() {
             )
           } else if (event === 'done') {
             setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === aiMessageId
-                  ? {
-                      ...msg,
-                      isStreaming: false,
-                      approvalRequest: undefined,
-                      messageId: parsed.assistant_message_id
-                    }
-                  : msg
-              )
+              prev.map((msg) => {
+                if (msg.id !== aiMessageId) return msg
+                const parts = msg.parts.map((part) => {
+                  if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
+                    return { ...part, toolStatus: 'done' as const }
+                  }
+                  return part
+                })
+                return {
+                  ...msg,
+                  isStreaming: false,
+                  approvalRequest: undefined,
+                  messageId: parsed.assistant_message_id,
+                  parts,
+                }
+              })
             )
             reader?.cancel()
-            return  // 终止事件，立即退出
+            return
           } else if (event === 'error') {
             console.error('SSE error:', parsed)
             setMessages((prev) =>
               prev.map((msg) => {
                 if (msg.id !== aiMessageId) return msg
 
-                const parts = [...msg.parts]
+                const parts = msg.parts.map((part) => {
+                  if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
+                    return { ...part, toolStatus: 'cancelled' as const }
+                  }
+                  return part
+                })
                 parts.push({
                   type: 'text',
-                  content: `\n\n_错误：${parsed.message || '未知错误'}_`
+                  content: `\n\n⚠️ 发生错误：${parsed.message || '未知错误'}`
                 })
 
                 return {
                   ...msg,
                   isStreaming: false,
-                  parts
+                  approvalRequest: undefined,
+                  parts,
                 }
               })
             )
             reader?.cancel()
-            return  // 终止事件，立即退出
+            return
           }
         } catch (err) {
           console.error('Parse error:', err)
@@ -460,14 +471,13 @@ export function useSSEChat() {
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id !== aiMessageId) return msg
-            if (!msg.isStreaming && !msg.approvalRequest) return msg
             const parts = msg.parts.map((part) => {
               if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
                 return { ...part, toolStatus: 'done' as const }
               }
               return part
             })
-            return { ...msg, isStreaming: false, approvalRequest: undefined, parts }
+            return { ...msg, isStreaming: false, parts }
           })
         )
       }
@@ -548,7 +558,7 @@ export function useSSEChat() {
         const msgId = reconnectMsgId
         setMessages((prev) =>
           prev.map((msg) => {
-            if (msg.id !== msgId || !msg.isStreaming) return msg
+            if (msg.id !== msgId) return msg
             const parts = msg.parts.map((part) => {
               if (part.type === 'tool' && (part.toolStatus === 'pending' || part.toolStatus === 'generating')) {
                 return { ...part, toolStatus: 'done' as const }

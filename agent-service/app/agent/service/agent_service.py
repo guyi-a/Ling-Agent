@@ -16,7 +16,7 @@ from app.agent.infra.llm_factory import get_llm
 from app.agent.tools.registry import get_all_tools, set_session_id, set_user_id
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
-from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS
+from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS, should_approve
 from app.core.config import settings
 
 import os
@@ -56,7 +56,6 @@ class AgentService:
             if tools:
                 self.tools.extend(tools)
 
-        self._prompt_template = self._load_system_prompt_template()
         self.agent = None
         self._active_tasks: Dict[str, asyncio.Task] = {}
         self._langfuse_handler = self._init_langfuse()
@@ -102,46 +101,6 @@ class AgentService:
             logger.error(f"AgentService init error: {e}", exc_info=True)
             self.agent = None
     
-    def _load_system_prompt_template(self) -> str:
-        """加载系统提示词模板（不渲染）"""
-        try:
-            import os
-            prompt_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "prompts",
-                "psych_core_prompt.md" if settings.PROMPT_MODE == "psych" else "core_prompt.md"
-            )
-            
-            if os.path.exists(prompt_path):
-                with open(prompt_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    logger.info(f"✓ 系统提示词模板已加载 ({len(content)} 字符)")
-                    return content
-            else:
-                logger.warning(f"提示词文件不存在: {prompt_path}")
-                return self._get_default_prompt()
-                
-        except Exception as e:
-            logger.error(f"加载提示词失败: {e}")
-            return self._get_default_prompt()
-
-    def _render_system_prompt(self, session_id: str) -> str:
-        """渲染系统提示词，仅替换 session_id（时间已移至动态上下文注入）"""
-        rendered = self._prompt_template.replace("{session_id}", session_id)
-        return rendered
-
-    def _get_default_prompt(self) -> str:
-        """获取默认提示词"""
-        return """You are Ling Assistant, a helpful Android control agent.
-        
-You can help users:
-- Control their Android device
-- Open apps
-- Check notifications
-- Manage files
-
-Always be concise and direct in your responses."""
-    
     async def process_message(
         self,
         db: AsyncSession,
@@ -170,12 +129,9 @@ Always be concise and direct in your responses."""
             # 注入 session_id 到文件工具
             set_session_id(session_id)
 
-            # 动态渲染系统提示词（含当前时间和 session_id）
-            rendered_prompt = self._render_system_prompt(session_id)
-
             # 构建消息上下文（支持多模态）
             messages = self._build_messages(
-                user_message, history, rendered_prompt,
+                user_message, history, None,
                 session_id=session_id,
                 attachments=attachments
             )
@@ -469,9 +425,8 @@ Always be concise and direct in your responses."""
             logger.debug(f"清理上轮 checkpoint: {e}")
 
         # 每轮全量构建消息
-        rendered_prompt = None if self._is_supervisor else self._render_system_prompt(session_id)
         messages = self._build_messages(
-            user_message, history, rendered_prompt,
+            user_message, history, None,
             session_id=session_id, attachments=attachments,
             user_id=user_id,
         )
@@ -689,57 +644,88 @@ Always be concise and direct in your responses."""
                 tool_name = intercepted.get("name", "unknown")
                 tool_input = intercepted.get("args", {})
 
-                request_id = make_request_id()
-                yield {
-                    "type": "approval_required",
-                    "request_id": request_id,
-                    "tool_name": tool_name,
-                    "tool_input": tool_input,
-                    "pending_count": num_pending,
-                }
+                # 用独立 session 实时读取用户审批偏好（绕过 agent db session 的 identity map 缓存）
+                user_prefs = None
+                if user_id:
+                    try:
+                        from app.database.session import AsyncSessionLocal
+                        from app.crud.user import user_crud
+                        async with AsyncSessionLocal() as prefs_db:
+                            user_obj = await user_crud.get_by_id(prefs_db, user_id)
+                            if user_obj and user_obj.preferences:
+                                user_prefs = json.loads(user_obj.preferences)
+                        logger.info(f"🔑 用户偏好: mode={user_prefs.get('approval_mode') if user_prefs else 'None'}")
+                    except Exception as e:
+                        logger.warning(f"加载用户偏好失败: {e}")
 
-                # 持久化审批状态到 DB（刷新后可恢复审批卡片）
-                try:
-                    await message_crud.update_extra_data(db, session_id, {
-                        "pending_approval": {
-                            "request_id": request_id,
-                            "tool_name": tool_name,
-                            "tool_input": tool_input,
-                        }
-                    })
-                except Exception as e:
-                    logger.warning(f"持久化审批状态失败: {e}")
+                decision = should_approve(tool_name, user_prefs)
 
-                approved = await request_approval(request_id)
-
-                # 清除 pending，记录审批结果
-                try:
-                    await message_crud.update_extra_data(db, session_id, {
-                        "pending_approval": None,
-                        "approval_result": "approved" if approved else "rejected",
-                    })
-                except Exception as e:
-                    logger.warning(f"清除审批状态失败: {e}")
-
-                if not approved:
-                    yield {"type": "approval_rejected", "tool_name": tool_name}
-                    # 手动存一条 tool 消息到 DB，让下次 history 完整（孤儿 assistant 消息有对应 tool）
+                if decision == "allow":
+                    # 自动通过
+                    logger.info(f"✅ 工具 {tool_name} 自动通过（用户偏好）")
+                    decisions = [{"type": "approve"} for _ in range(num_pending)]
+                    run_input = Command(resume={"decisions": decisions})
+                elif decision == "deny":
+                    # 自动拒绝
+                    logger.info(f"❌ 工具 {tool_name} 自动拒绝（用户偏好）")
                     rejected_tool_call_id = pending_tool_call_ids[0] if pending_tool_call_ids else ""
                     if rejected_tool_call_id:
                         await self._save_tool_message(
                             db, session_id, tool_name,
-                            "用户拒绝执行此操作，操作已取消。",
+                            "工具被用户策略禁止执行。",
                             rejected_tool_call_id
                         )
-                    # 删除 checkpointer 里该 thread 的状态，彻底防止下次 session 重新 resume 旧中断
                     await get_checkpointer().adelete_thread(session_id)
-                    # 不 resume，直接输出取消提示并结束
-                    yield {"type": "token", "text": f"好的，已取消操作。"}
+                    yield {"type": "approval_rejected", "tool_name": tool_name}
+                    yield {"type": "token", "text": f"工具 {tool_name} 已被您设为禁止执行，已自动拒绝。"}
                     break
                 else:
-                    # 对所有被拦截的工具都发 approve decision
-                    decisions = [{"type": "approve"} for _ in range(num_pending)]
-                    run_input = Command(resume={"decisions": decisions})
+                    # 需要人工审批
+                    request_id = make_request_id()
+                    yield {
+                        "type": "approval_required",
+                        "request_id": request_id,
+                        "tool_name": tool_name,
+                        "tool_input": tool_input,
+                        "pending_count": num_pending,
+                    }
+
+                    try:
+                        await message_crud.update_extra_data(db, session_id, {
+                            "pending_approval": {
+                                "request_id": request_id,
+                                "tool_name": tool_name,
+                                "tool_input": tool_input,
+                            }
+                        })
+                    except Exception as e:
+                        logger.warning(f"持久化审批状态失败: {e}")
+
+                    approved = await request_approval(request_id)
+
+                    try:
+                        await message_crud.update_extra_data(db, session_id, {
+                            "pending_approval": None,
+                            "approval_result": "approved" if approved else "rejected",
+                        })
+                    except Exception as e:
+                        logger.warning(f"清除审批状态失败: {e}")
+
+                    if not approved:
+                        yield {"type": "approval_rejected", "tool_name": tool_name}
+                        rejected_tool_call_id = pending_tool_call_ids[0] if pending_tool_call_ids else ""
+                        if rejected_tool_call_id:
+                            await self._save_tool_message(
+                                db, session_id, tool_name,
+                                "用户拒绝执行此操作，操作已取消。",
+                                rejected_tool_call_id
+                            )
+                        await get_checkpointer().adelete_thread(session_id)
+                        yield {"type": "token", "text": f"好的，已取消操作。"}
+                        break
+                    else:
+                        decisions = [{"type": "approve"} for _ in range(num_pending)]
+                        run_input = Command(resume={"decisions": decisions})
 
             # 保存最终 assistant 消息
             assistant_message_id = None
@@ -783,15 +769,17 @@ Always be concise and direct in your responses."""
 
             # 清理 checkpointer 状态
             try:
-                await get_checkpointer().adelete_thread(session_id)
+                cp = get_checkpointer()
+                if cp is not None:
+                    await cp.adelete_thread(session_id)
             except Exception as e:
-                logger.error(f"清理 checkpointer 失败: {e}")
+                logger.warning(f"清理 checkpointer 失败: {e}")
             raise  # 重新抛出以正确终止任务
 
         except Exception as e:
             logger.error(f"stream_message error: {e}", exc_info=True)
             error_msg = f"\n\n⚠️ 发生错误: {e}"
-            yield {"type": "token", "text": error_msg}
+            yield {"type": "error", "message": str(e)}
 
             # 保存已生成内容 + 错误信息到数据库
             assistant_message_id = None

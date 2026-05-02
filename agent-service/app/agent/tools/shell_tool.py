@@ -10,6 +10,7 @@ import logging
 import platform
 import os
 import signal
+import subprocess
 from pathlib import Path
 from typing import Optional, Type
 
@@ -22,13 +23,23 @@ from app.agent.tools.file_tool import get_session_workspace
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30
+_IS_WIN = platform.system() == "Windows"
+
+
+def _decode(data: bytes) -> str:
+    """Decode subprocess output, trying the system codepage on Windows first."""
+    if _IS_WIN:
+        try:
+            return data.decode("gbk")
+        except (UnicodeDecodeError, LookupError):
+            pass
+    return data.decode("utf-8", errors="replace")
 
 
 def _kill_process(proc: asyncio.subprocess.Process) -> None:
     """Terminate a subprocess and its process group."""
     if platform.system() == "Windows":
         try:
-            import subprocess
             subprocess.run(
                 ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
                 capture_output=True,
@@ -86,6 +97,33 @@ class ShellTool(BaseTool):
     async def _arun(self, command: str, timeout: int = _DEFAULT_TIMEOUT) -> str:
         return await self._execute(command, timeout)
 
+    async def _execute_sync_fallback(self, command: str, timeout: int, cwd: Path) -> str:
+        """Fallback for Windows when ProactorEventLoop is not available."""
+        loop = asyncio.get_running_loop()
+        def _run() -> str:
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=str(cwd),
+                    capture_output=True,
+                    timeout=timeout,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+            except subprocess.TimeoutExpired:
+                return f"Command timed out after {timeout} seconds.\nCommand: {command}"
+            stdout = _decode(result.stdout).strip()
+            stderr = _decode(result.stderr).strip()
+            exit_code = result.returncode
+            parts = [f"Exit code: {exit_code}"]
+            if stdout:
+                parts.append(f"Stdout:\n{stdout}")
+            if stderr:
+                parts.append(f"Stderr:\n{stderr}")
+            logger.info(f"🖥️  Command finished (exit={exit_code}): {command!r}")
+            return "\n\n".join(parts)
+        return await loop.run_in_executor(None, _run)
+
     async def _execute(self, command: str, timeout: int) -> str:
         if self.current_session_id:
             cwd = get_session_workspace(self.current_session_id)
@@ -95,13 +133,24 @@ class ShellTool(BaseTool):
 
         logger.info(f"🖥️  Run command in {cwd}: {command!r}")
 
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        is_win = platform.system() == "Windows"
+
+        kwargs: dict = dict(
             cwd=str(cwd),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
         )
+        if not is_win:
+            kwargs["start_new_session"] = True
+        else:
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+
+        if is_win:
+            loop = asyncio.get_running_loop()
+            if not isinstance(loop, asyncio.ProactorEventLoop):
+                return await self._execute_sync_fallback(command, timeout, cwd)
+
+        proc = await asyncio.create_subprocess_shell(command, **kwargs)
 
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
@@ -119,8 +168,8 @@ class ShellTool(BaseTool):
             await proc.wait()
             raise
 
-        stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
-        stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+        stdout = _decode(stdout_bytes).strip()
+        stderr = _decode(stderr_bytes).strip()
         exit_code = proc.returncode or 0
 
         parts = [f"Exit code: {exit_code}"]

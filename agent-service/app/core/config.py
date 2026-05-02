@@ -40,9 +40,6 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
 
-    # Prompt mode: "core" (default) or "psych" (psychology health competition)
-    PROMPT_MODE: str = "core"
-
     # Langfuse Observability (optional)
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None

@@ -23,10 +23,12 @@ export const chatApi = {
   },
 
   // 审批工具调用
-  approve: async (requestId: string, approved: boolean) => {
+  approve: async (requestId: string, approved: boolean, alwaysAllow?: boolean, toolName?: string) => {
     const { data } = await apiClient.post('/api/chat/approve', {
       request_id: requestId,
       approved,
+      always_allow: alwaysAllow || false,
+      tool_name: toolName || null,
     })
     return data
   },

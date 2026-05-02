@@ -23,7 +23,7 @@ from app.agent.tools.file_tool import get_session_workspace
 
 logger = logging.getLogger(__name__)
 
-type Locale = Literal["zh-CN", "zh-TW", "en"]
+Locale = Literal["zh-CN", "zh-TW", "en"]
 
 # Command descriptions
 COMMAND_DESCRIPTIONS: dict[str, dict[Locale, str]] = {

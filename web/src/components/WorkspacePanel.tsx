@@ -14,6 +14,7 @@ interface WorkspacePanelProps {
   sessionId: string | null
   isStreaming?: boolean
   onOpenPreview?: (url: string, title: string) => void
+  style?: React.CSSProperties
 }
 
 const EXT_LANG_MAP: Record<string, string> = {
@@ -24,7 +25,7 @@ const EXT_LANG_MAP: Record<string, string> = {
   txt: 'text',
 }
 
-export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }: WorkspacePanelProps) {
+export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview, style }: WorkspacePanelProps) {
   const isDark = useThemeStore((state) => state.isDark)
   const [uploadFiles, setUploadFiles] = useState<WorkspaceFile[]>([])
   const [outputFiles, setOutputFiles] = useState<WorkspaceFile[]>([])
@@ -553,7 +554,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview }
 
   return (
     <>
-      <div className="w-80 bg-white dark:bg-[#0f0f15] border-l border-gray-200 dark:border-gray-800 flex flex-col">
+      <div className="bg-white dark:bg-[#22222e] border-l border-gray-200 dark:border-gray-800 flex flex-col flex-shrink-0" style={style}>
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between">

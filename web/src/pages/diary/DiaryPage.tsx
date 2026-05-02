@@ -1,20 +1,53 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Heart, Brain, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowDownWideNarrow, ArrowUpNarrowWide, Sun, Moon, BookOpen } from 'lucide-react'
+import { ArrowLeft, Heart, Brain, Pencil, Trash2, ChevronLeft, ChevronRight, ArrowDownWideNarrow, ArrowUpNarrowWide, Sun, Moon, BookOpen, AlertTriangle, CloudRain, Flame, Leaf, Smile, BatteryLow, Headphones, Wind, CircleDot, Bone, Activity, HelpCircle, type LucideIcon } from 'lucide-react'
 import { healthApi, type HealthRecord, type HealthRecordCreate } from '@/api/health'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Logo from '@/components/Logo'
 import { useThemeStore } from '@/stores/themeStore'
 
-const BODY_PARTS = ['头', '胸', '胃', '背', '全身', '其他']
-const EMOTIONS = [
-  { label: '焦虑', emoji: '😰' },
-  { label: '低落', emoji: '😞' },
-  { label: '烦躁', emoji: '😤' },
-  { label: '平静', emoji: '😌' },
-  { label: '开心', emoji: '😊' },
-  { label: '疲惫', emoji: '😩' },
+const BODY_PARTS: { label: string; icon: LucideIcon; bg: string; fg: string }[] = [
+  { label: '头',   icon: Headphones, bg: 'bg-sky-100 dark:bg-sky-900/40',      fg: 'text-sky-600 dark:text-sky-400' },
+  { label: '胸',   icon: Wind,       bg: 'bg-teal-100 dark:bg-teal-900/40',    fg: 'text-teal-600 dark:text-teal-400' },
+  { label: '胃',   icon: CircleDot,  bg: 'bg-amber-100 dark:bg-amber-900/40',  fg: 'text-amber-600 dark:text-amber-400' },
+  { label: '背',   icon: Bone,       bg: 'bg-orange-100 dark:bg-orange-900/40', fg: 'text-orange-600 dark:text-orange-400' },
+  { label: '全身', icon: Activity,   bg: 'bg-rose-100 dark:bg-rose-900/40',    fg: 'text-rose-500 dark:text-rose-400' },
+  { label: '其他', icon: HelpCircle, bg: 'bg-gray-100 dark:bg-gray-700/40',    fg: 'text-gray-500 dark:text-gray-400' },
 ]
+
+function BodyPartIcon({ part, size = 'sm' }: { part: string; size?: 'sm' | 'md' }) {
+  const b = BODY_PARTS.find(bp => bp.label === part)
+  if (!b) return null
+  const Icon = b.icon
+  const dim = size === 'sm' ? 'w-5 h-5' : 'w-7 h-7'
+  const iconDim = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full ${dim} ${b.bg}`}>
+      <Icon className={`${iconDim} ${b.fg}`} />
+    </span>
+  )
+}
+const EMOTIONS: { label: string; icon: LucideIcon; bg: string; fg: string }[] = [
+  { label: '焦虑', icon: AlertTriangle, bg: 'bg-amber-100 dark:bg-amber-900/40', fg: 'text-amber-600 dark:text-amber-400' },
+  { label: '低落', icon: CloudRain,     bg: 'bg-blue-100 dark:bg-blue-900/40',   fg: 'text-blue-600 dark:text-blue-400' },
+  { label: '烦躁', icon: Flame,         bg: 'bg-red-100 dark:bg-red-900/40',     fg: 'text-red-500 dark:text-red-400' },
+  { label: '平静', icon: Leaf,          bg: 'bg-emerald-100 dark:bg-emerald-900/40', fg: 'text-emerald-600 dark:text-emerald-400' },
+  { label: '开心', icon: Smile,         bg: 'bg-yellow-100 dark:bg-yellow-900/40', fg: 'text-yellow-600 dark:text-yellow-400' },
+  { label: '疲惫', icon: BatteryLow,    bg: 'bg-purple-100 dark:bg-purple-900/40', fg: 'text-purple-500 dark:text-purple-400' },
+]
+
+function EmotionIcon({ emotion, size = 'sm' }: { emotion: string; size?: 'sm' | 'md' }) {
+  const e = EMOTIONS.find(em => em.label === emotion)
+  if (!e) return null
+  const Icon = e.icon
+  const dim = size === 'sm' ? 'w-5 h-5' : 'w-7 h-7'
+  const iconDim = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full ${dim} ${e.bg}`}>
+      <Icon className={`${iconDim} ${e.fg}`} />
+    </span>
+  )
+}
 
 function parseUTC(dateStr: string): Date {
   const s = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
@@ -126,9 +159,9 @@ export default function DiaryPage() {
   }, [records])
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#09090f] flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1a1a24] flex flex-col">
       {/* 顶栏 */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#0f0f15]/80 backdrop-blur-md">
+      <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#22222e]/80 backdrop-blur-md">
         <div className="px-6 h-16 flex items-center gap-3">
           <button onClick={() => navigate('/chat')} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -146,7 +179,7 @@ export default function DiaryPage() {
       {/* 统计条 */}
       {!loading && records.length > 0 && (
         <div className="px-6 pt-5 pb-0 flex justify-center">
-          <div className="flex items-center gap-6 px-6 py-3 rounded-2xl bg-white dark:bg-white/[0.02] border border-gray-100 dark:border-gray-800/60" style={{ maxWidth: 1440, width: '100%' }}>
+          <div className="flex items-center gap-6 px-6 py-3 rounded-2xl bg-white dark:bg-white/[0.05] border border-gray-100 dark:border-gray-800/60" style={{ maxWidth: 1440, width: '100%' }}>
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center">
                 <BookOpen className="w-4 h-4 text-rose-400" />
@@ -175,7 +208,7 @@ export default function DiaryPage() {
                 <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
                 <div className="text-center">
                   <div className="text-base">
-                    {EMOTIONS.find(e => e.label === stats.topEmotion![0])?.emoji || '😶'}
+                    <EmotionIcon emotion={stats.topEmotion![0]} />
                   </div>
                   <div className="text-[11px] text-gray-400 dark:text-gray-500">最常记录</div>
                 </div>
@@ -194,7 +227,7 @@ export default function DiaryPage() {
             {/* 装订孔 */}
             <div className="absolute right-[4px] top-0 bottom-0 flex flex-col justify-evenly pointer-events-none z-10">
               {[0,1,2,3,4,5].map(i => (
-                <div key={i} className="w-2.5 h-2.5 rounded-full bg-gray-50 dark:bg-[#09090f] border-2 border-[#d4c4b0] dark:border-gray-700" />
+                <div key={i} className="w-2.5 h-2.5 rounded-full bg-gray-50 dark:bg-[#1a1a24] border-2 border-[#d4c4b0] dark:border-gray-700" />
               ))}
             </div>
 
@@ -235,7 +268,7 @@ export default function DiaryPage() {
                       <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{date}</p>
                       {items.map((r, idx) => {
                         const isBody = r.record_type === 'body'
-                        const emotionObj = EMOTIONS.find(e => e.label === r.emotion)
+
                         const isActive = selectedId === r.record_id
                         const summary = isBody
                           ? (r.symptoms || r.notes || '无详细描述')
@@ -251,7 +284,7 @@ export default function DiaryPage() {
                             >
                               <div className="flex items-center gap-2 h-8">
                                 <span className="flex-shrink-0">
-                                  {isBody ? <Heart className="w-3.5 h-3.5 text-rose-400" /> : <span className="text-sm">{emotionObj?.emoji || '😶'}</span>}
+                                  {isBody ? <BodyPartIcon part={r.body_part || ''} /> : <EmotionIcon emotion={r.emotion || ''} />}
                                 </span>
                                 <span className="flex-1 text-sm text-gray-900 dark:text-gray-100 truncate">
                                   {isBody ? `${r.body_part}不适` : r.emotion}
@@ -275,12 +308,12 @@ export default function DiaryPage() {
                                 </p>
                                 {isBody ? (
                                   <>
-                                    <p className="text-gray-700 dark:text-gray-200"><span className="text-gray-400">部位：</span>{r.body_part}</p>
+                                    <p className="text-gray-700 dark:text-gray-200 flex items-center gap-1"><span className="text-gray-400">部位：</span><BodyPartIcon part={r.body_part || ''} /> {r.body_part}</p>
                                     {r.symptoms && <p className="text-gray-700 dark:text-gray-200"><span className="text-gray-400">症状：</span>{r.symptoms}</p>}
                                   </>
                                 ) : (
                                   <>
-                                    <p className="text-gray-700 dark:text-gray-200"><span className="text-gray-400">情绪：</span>{emotionObj?.emoji} {r.emotion}</p>
+                                    <p className="text-gray-700 dark:text-gray-200 flex items-center gap-1"><span className="text-gray-400">情绪：</span><EmotionIcon emotion={r.emotion || ''} /> {r.emotion}</p>
                                     {r.trigger && <p className="text-gray-700 dark:text-gray-200"><span className="text-gray-400">触发：</span>{r.trigger}</p>}
                                   </>
                                 )}
@@ -351,13 +384,19 @@ export default function DiaryPage() {
                   <div className="h-8" />
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">哪里不舒服？</p>
                   <div className="flex flex-wrap gap-1.5 h-8 items-center">
-                    {BODY_PARTS.map(p => (
-                      <button key={p} onClick={() => setBodyPart(bodyPart === p ? '' : p)}
-                        className={`px-3 h-[26px] rounded-full text-sm transition-all ${
-                          bodyPart === p ? 'bg-rose-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-white/[0.04] text-gray-500 dark:text-gray-400 hover:bg-rose-50 dark:hover:bg-rose-900/30'
-                        }`}
-                      >{p}</button>
-                    ))}
+                    {BODY_PARTS.map(bp => {
+                      const Icon = bp.icon
+                      return (
+                        <button key={bp.label} onClick={() => setBodyPart(bodyPart === bp.label ? '' : bp.label)}
+                          className={`flex items-center gap-1.5 px-3 h-[26px] rounded-full text-sm transition-all ${
+                            bodyPart === bp.label ? 'bg-rose-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-white/[0.04] text-gray-500 dark:text-gray-400 hover:bg-rose-50 dark:hover:bg-rose-900/30'
+                          }`}
+                        >
+                          <Icon className={`w-3.5 h-3.5 ${bodyPart === bp.label ? 'text-white' : bp.fg}`} />
+                          {bp.label}
+                        </button>
+                      )
+                    })}
                   </div>
                   <div className="h-8" />
                   <div className="h-8" />
@@ -372,13 +411,19 @@ export default function DiaryPage() {
                   <div className="h-8" />
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">此刻的心情</p>
                   <div className="flex flex-wrap gap-1.5 h-8 items-center">
-                    {EMOTIONS.map(e => (
-                      <button key={e.label} onClick={() => setEmotion(emotion === e.label ? '' : e.label)}
-                        className={`px-3 h-[26px] rounded-full text-sm transition-all ${
-                          emotion === e.label ? 'bg-indigo-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-white/[0.04] text-gray-500 dark:text-gray-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
-                        }`}
-                      >{e.emoji} {e.label}</button>
-                    ))}
+                    {EMOTIONS.map(e => {
+                      const Icon = e.icon
+                      return (
+                        <button key={e.label} onClick={() => setEmotion(emotion === e.label ? '' : e.label)}
+                          className={`flex items-center gap-1.5 px-3 h-[26px] rounded-full text-sm transition-all ${
+                            emotion === e.label ? 'bg-indigo-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-white/[0.04] text-gray-500 dark:text-gray-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
+                          }`}
+                        >
+                          <Icon className={`w-3.5 h-3.5 ${emotion === e.label ? 'text-white' : e.fg}`} />
+                          {e.label}
+                        </button>
+                      )
+                    })}
                   </div>
                   <div className="h-8" />
                   <div className="h-8" />

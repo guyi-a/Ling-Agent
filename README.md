@@ -101,14 +101,39 @@ cp agent-service/.env_example agent-service/.env
 # 安装后端依赖
 cd agent-service
 python -m venv venv
-source venv/bin/activate  
+source venv/bin/activate
 pip install -r requirements.txt
 cd ..
-# Windows: venv\Scripts\activate
 
 # 安装前端依赖
 cd web && npm install && cd ..
 ```
+
+<details>
+<summary><b>Windows 安装步骤</b></summary>
+
+```powershell
+git clone https://github.com/guyi-a/Ling-Agent.git
+cd Ling-Agent
+
+# 配置环境变量
+copy agent-service\.env_example agent-service\.env
+# 编辑 agent-service\.env，填入 LLM_API_KEY
+
+# 安装后端依赖
+cd agent-service
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+cd ..
+
+# 安装前端依赖
+cd web
+npm install
+cd ..
+```
+
+</details>
 
 ### 启动
 
@@ -127,6 +152,29 @@ uvicorn main:app --host 0.0.0.0 --port 9000 --reload
 # 前端（另开终端）
 cd web && npm run dev
 ```
+
+<details>
+<summary><b>Windows 启动步骤</b></summary>
+
+```powershell
+# 一键启动（会打开两个窗口分别运行前后端）
+.\start-dev.bat
+```
+
+或分别在两个终端中执行：
+
+```powershell
+# 终端 1：后端
+cd agent-service
+venv\Scripts\activate
+uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+
+# 终端 2：前端
+cd web
+npm run dev
+```
+
+</details>
 
 访问地址：
 - **前端**: http://localhost:5174
