@@ -353,7 +353,7 @@ export default function AppsPage() {
                                 {app.name}
                               </span>
                               <StatusIndicator status={app.status} />
-                              <PortBadge port={app.port} />
+                              {isRunning && <PortBadge port={app.port} />}
                             </div>
                             <p className="text-xs text-gray-400 dark:text-gray-600 truncate mt-1 font-mono">
                               {app.command.join(' ')}

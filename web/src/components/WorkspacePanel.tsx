@@ -809,7 +809,7 @@ export default function WorkspacePanel({ sessionId, isStreaming, onOpenPreview, 
                   )
                 } else if (ext === 'md') {
                   return (
-                    <div className="prose dark:prose-invert max-w-none">
+                    <div className="prose dark:prose-invert max-w-none prose-headings:border-b prose-headings:border-gray-200 dark:prose-headings:border-gray-700 prose-headings:pb-2 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-gray-100">
                       <MarkdownRenderer content={previewContent} />
                     </div>
                   )

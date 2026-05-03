@@ -105,6 +105,7 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [sendDisabled, setSendDisabled] = useState(true)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [sessionTitle, setSessionTitle] = useState<string>('')
   const [selectedFiles, setSelectedFiles] = useState<WorkspaceFile[]>([])
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false)
@@ -128,6 +129,7 @@ export default function ChatPage() {
   const [workspaceWidth, setWorkspaceWidth] = useState(320)
   const [isDragging, setIsDragging] = useState<'left' | 'right' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const loadIdRef = useRef(0)
   const { messages, isStreaming, currentSessionId, setCurrentSessionId, sendMessage, stopStreaming, setMessages, reconnect } = useSSEChat()
   const [sidebarRefresh, setSidebarRefresh] = useState(0)
   const prevStreamingRef = useRef(false)
@@ -139,6 +141,7 @@ export default function ChatPage() {
 
   // 加载会话历史消息
   const loadSessionHistory = useCallback(async (sessionId: string) => {
+    const loadId = ++loadIdRef.current
     try {
       const response = await chatApi.getHistory(sessionId)
       // API返回的格式: {session_id, messages: [{role, content, message_id?, extra_data?}]}
@@ -275,7 +278,18 @@ export default function ChatPage() {
         }
       }
 
-      setMessages(mergedMessages)
+      const INITIAL_COUNT = 10
+      if (mergedMessages.length > INITIAL_COUNT) {
+        setMessages(mergedMessages.slice(-INITIAL_COUNT))
+        const schedule = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50))
+        schedule(() => {
+          if (loadIdRef.current === loadId) {
+            setMessages(mergedMessages)
+          }
+        })
+      } else {
+        setMessages(mergedMessages)
+      }
     } catch (error) {
       console.error('加载历史消息失败:', error)
       setMessages([])
@@ -591,7 +605,9 @@ export default function ChatPage() {
     setPreviewTitle('')
 
     if (sessionId) {
+      setIsLoadingHistory(true)
       await loadSessionHistory(sessionId)
+      setIsLoadingHistory(false)
       // 获取会话标题
       try {
         const session = await sessionsApi.getById(sessionId)
@@ -750,7 +766,18 @@ export default function ChatPage() {
         {/* Messages — 预览时隐藏 */}
         <main className={`${previewUrl ? 'hidden' : 'flex-1'} overflow-y-auto p-4 relative`}>
           <div className="max-w-4xl mx-auto space-y-4 relative z-10">
-            {messages.length === 0 ? (
+            {isLoadingHistory ? (
+              <div className="space-y-4 py-8 animate-pulse">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end pl-20' : 'justify-start pr-20'}`}>
+                    <div className={`rounded-xl px-4 py-3 ${i % 2 === 0 ? 'bg-gray-100 dark:bg-gray-800' : 'bg-white dark:bg-white/[0.06] border border-gray-100 dark:border-gray-800'}`}>
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-2" />
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 py-16">
                 <div className="mx-auto mb-4 opacity-15">
                   <Logo size={56} />
@@ -769,9 +796,9 @@ export default function ChatPage() {
                       '生成一份周报模板，包含本周完成、下周计划和风险项',
                     ]},
                     { icon: '💻', title: '开发应用', cases: [
-                      '帮我做一个番茄钟计时器，有倒计时动画、专注统计和历史记录',
-                      '做一个个人记账本，能记录收支、按分类统计、显示月度图表',
-                      '帮我做一个天气仪表盘，展示实时天气、温度趋势和空气质量',
+                      '帮我做一个情绪轮盘，我想更精确地描述我现在的感受',
+                      '帮我做一个呼吸放松练习，我现在有点焦虑',
+                      '帮我做一个认知扭曲训练小游戏，我想学会识别自己的思维陷阱',
                     ]},
                     { icon: '🧠', title: '身心健康', cases: [
                       '我今天头有点疼，心情也不太好，帮我记录一下健康日记',
@@ -924,8 +951,10 @@ export default function ChatPage() {
 
                             if (part.type === 'tool') {
                               const toolKey = `${msg.id}-${partIdx}`
-                              const isExpanded = !collapsedTools.has(toolKey)
-                              const canExpand = !part.isSkill && part.toolStatus === 'done' && (part.toolInput || part.toolOutput)
+                              const defaultCollapsed = part.isSkill || /^(read_file|list_dir)$/.test(part.toolName || '')
+                              const toggled = collapsedTools.has(toolKey)
+                              const isExpanded = defaultCollapsed ? toggled : !toggled
+                              const canExpand = part.toolStatus === 'done' && (part.toolInput || part.toolOutput)
 
                               return (
                                 <div key={partIdx} className="my-2 not-prose">
@@ -1077,7 +1106,7 @@ export default function ChatPage() {
                         {msg.isStreaming && msg.parts.length === 0 && (
                           <div className="flex items-center gap-2 mt-2 text-gray-500 dark:text-gray-400">
                             <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
-                            <span className="text-sm">AI 正在思考...</span>
+                            <span className="text-sm">Thinking...</span>
                           </div>
                         )}
                         {msg.isCompacting && (

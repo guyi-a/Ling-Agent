@@ -137,7 +137,7 @@ def load_skill_body(skill_info: SkillInfo, arguments: str = "") -> str:
             body = body.replace(f"$ARGUMENTS[{i}]", part)
             body = body.replace(f"${i}", part)
 
-    return f"Base Path: {skill_info.skill_dir}\n\n{body}"
+    return body
 
 
 # ─────────────────────────── LangChain Tool ──────────────────────────────

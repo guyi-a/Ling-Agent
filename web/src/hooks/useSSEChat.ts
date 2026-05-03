@@ -136,6 +136,7 @@ export function useSSEChat() {
             }
 
             accumulated += parsed.text
+            const textSnapshot = accumulated
             setMessages((prev) =>
               prev.map((msg) => {
                 if (msg.id !== aiMessageId) return msg
@@ -144,10 +145,10 @@ export function useSSEChat() {
                 if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
                   parts[parts.length - 1] = {
                     type: 'text',
-                    content: accumulated
+                    content: textSnapshot
                   }
                 } else {
-                  parts.push({ type: 'text', content: accumulated })
+                  parts.push({ type: 'text', content: textSnapshot })
                 }
 
                 return { ...msg, parts }
@@ -235,6 +236,7 @@ export function useSSEChat() {
               })
             )
           } else if (event === 'handoff') {
+            accumulated = ''
             setMessages((prev) =>
               prev.map((msg) => {
                 if (msg.id !== aiMessageId) return msg

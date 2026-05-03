@@ -14,25 +14,38 @@ from app.schemas.message import MessageCreate
 
 def _drop_orphan_tool_calls(messages: List[dict]) -> List[dict]:
     """
-    移除没有对应 tool 消息的孤儿 assistant[tool_calls] 消息（及其后的孤立 tool 消息）。
-    场景：审批拒绝 / 中断时，assistant 带 tool_calls 已存库，但 tool 消息没有存，
-    下次构建 history 时模型会报 "tool_calls must be followed by tool messages" 错误。
-    扫描全部消息，不只截末尾。
+    修复 assistant[tool_calls] 与后续 tool 消息不匹配的问题。
+    - 完全没有 tool 响应 → 整条 assistant 消息被跳过（保留文本部分）
+    - 部分 tool_call 没有响应 → 剥离无响应的 tool_call，只保留匹配的
     """
     result = []
     i = 0
     while i < len(messages):
         msg = messages[i]
         if msg.get("role") == "assistant" and msg.get("tool_calls"):
-            # 检查紧跟的是否有 tool 消息
             j = i + 1
-            has_tool = j < len(messages) and messages[j].get("role") == "tool"
-            if not has_tool:
-                # 孤儿：跳过这条，同时跳过其后所有连续 tool 消息（理论上没有，但保险）
-                i += 1
-                while i < len(messages) and messages[i].get("role") == "tool":
-                    i += 1
+            tool_ids = set()
+            while j < len(messages) and messages[j].get("role") == "tool":
+                tid = messages[j].get("tool_call_id", "")
+                if tid:
+                    tool_ids.add(tid)
+                j += 1
+
+            if not tool_ids:
+                if msg.get("content"):
+                    result.append({"role": "assistant", "content": msg["content"]})
+                i = j
                 continue
+
+            matched_tcs = [tc for tc in msg["tool_calls"] if tc.get("id", "") in tool_ids]
+            if matched_tcs:
+                result.append({**msg, "tool_calls": matched_tcs})
+            elif msg.get("content"):
+                result.append({"role": "assistant", "content": msg["content"]})
+            # 跳过不匹配的 tool 消息不需要，因为 tool 消息已按 tool_call_id 收集
+            i += 1
+            continue
+
         result.append(msg)
         i += 1
     return result
@@ -138,8 +151,13 @@ class MessageCRUD:
                 tool_name = extra.get("tool_name", "unknown")
                 if not tool_call_id:
                     continue
-                # 保底校验：前一条必须是带 tool_calls 的 assistant 消息
-                if not result or result[-1].get("role") != "assistant" or not result[-1].get("tool_calls"):
+                # 保底校验：往回找最近的非 tool 消息，必须是带 tool_calls 的 assistant
+                parent_found = False
+                for k in range(len(result) - 1, -1, -1):
+                    if result[k].get("role") != "tool":
+                        parent_found = result[k].get("role") == "assistant" and bool(result[k].get("tool_calls"))
+                        break
+                if not parent_found:
                     continue
                 result.append({
                     "role": "tool",
@@ -305,7 +323,12 @@ class MessageCRUD:
                 tool_name = extra.get("tool_name", "unknown")
                 if not tool_call_id:
                     continue
-                if not out or out[-1].get("role") != "assistant" or not out[-1].get("tool_calls"):
+                parent_found = False
+                for k in range(len(out) - 1, -1, -1):
+                    if out[k].get("role") != "tool":
+                        parent_found = out[k].get("role") == "assistant" and bool(out[k].get("tool_calls"))
+                        break
+                if not parent_found:
                     continue
                 out.append({
                     "role": "tool",

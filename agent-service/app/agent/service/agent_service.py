@@ -456,8 +456,9 @@ class AgentService:
         last_round_saved_as_tool_call = False
         last_handoff_to: Optional[str] = None  # 最后一次 "to" handoff 的目标 agent
         prev_handoff_to: Optional[str] = None  # 上一次 handoff 目标，用于检测连续重复
-        sub_agent_responded = False  # 子 agent 已回复，抑制 supervisor 后续文本
         current_node: Optional[str] = None  # 当前正在运行的 langgraph 节点
+        sub_agent_responded = False  # sub-agent 已回复，supervisor 下次输出需缓冲
+        supervisor_closing_buffer = ""  # 缓冲 supervisor 收尾文本，用于过滤 __END__
 
         # 当前运行的输入（首次是消息列表，resume 时是 Command）
         run_input = {"messages": messages}
@@ -477,17 +478,14 @@ class AgentService:
                             if node in ("agent", "supervisor"):
                                 yield {"type": "handoff", "to": last_handoff_to, "direction": "back"}
                                 last_handoff_to = None
-                        if node not in ("agent", "supervisor"):
-                            sub_agent_responded = True
+                                sub_agent_responded = True
+                                supervisor_closing_buffer = ""
                         current_round_text = ""
                         tc_chunks = {}
                         announced_tc_idxs = set()
                         yield {"type": "model_start"}
 
                     elif kind == "on_chat_model_stream":
-                        # 子 agent 已回复后，supervisor 的文本输出是多余的（常含幻觉内容）
-                        if sub_agent_responded and current_node in ("agent", "supervisor"):
-                            continue
                         chunk = event.get("data", {}).get("chunk")
                         if not chunk:
                             continue
@@ -501,7 +499,13 @@ class AgentService:
                         if text:
                             current_round_text += text
                             full_response += text
-                            yield {"type": "token", "text": text}
+                            if sub_agent_responded:
+                                supervisor_closing_buffer += text
+                            else:
+                                # fallback: 过滤可能残留的 __END__ 标记
+                                safe_text = text.replace("__END__", "")
+                                if safe_text:
+                                    yield {"type": "token", "text": safe_text}
                         for tc in tcc_list:
                             if isinstance(tc, dict):
                                 tc_id = tc.get("id", "")
@@ -553,6 +557,18 @@ class AgentService:
                                     f"cache_hit: {cache_read}"
                                 )
 
+                        # supervisor 收尾缓冲处理
+                        if supervisor_closing_buffer:
+                            has_end_marker = "__END__" in supervisor_closing_buffer
+                            closing = supervisor_closing_buffer.replace("__END__", "").strip()
+                            is_rerouting = any(
+                                _is_handoff_tool(tc_chunks[idx].get("name", ""))
+                                for idx in tc_chunks
+                            ) if tc_chunks else False
+                            if closing and len(closing) <= 50 and (has_end_marker or is_rerouting):
+                                yield {"type": "token", "text": closing}
+                            supervisor_closing_buffer = ""
+
                         if tc_chunks:
                             tc_list = []
                             for idx in sorted(tc_chunks.keys()):
@@ -587,6 +603,7 @@ class AgentService:
                                     break
                                 prev_handoff_to = target
                                 last_handoff_to = target
+                                sub_agent_responded = False
                             logger.info(f"Handoff {direction} → {target}")
                             # 持久化 handoff 到 DB，刷新后可从历史还原
                             try:

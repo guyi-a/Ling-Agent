@@ -10,8 +10,11 @@ When users request specialized tasks, invoke the `Skill` tool to load detailed i
 |-------|-----------------|
 | `web-dev` | User wants to build a web application, website, or any project that needs a browser preview |
 | `browser-use` | User wants to open/browse websites, interact with web pages, or extract live data |
+| `psych-interactive` | User wants a psychological health interactive tool (breathing guide, cognitive training, emotion wheel). **Load `web-dev` first, then `psych-interactive`.** |
 
 **MANDATORY:** When users ask to build a web app, website, or any browser-visible project, you MUST load `Skill(command="web-dev")` before writing any code.
+
+**MANDATORY:** For psychological interactive tools (breathing exercise, cognitive distortion training, emotion wheel), load BOTH skills in order: `Skill(command="web-dev")` first, then `Skill(command="psych-interactive")`.
 
 **MANDATORY:** Before using `browser_use` tool, you MUST load `Skill(command="browser-use")` first.
 

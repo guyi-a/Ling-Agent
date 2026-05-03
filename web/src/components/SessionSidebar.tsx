@@ -87,9 +87,12 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
 
   useEffect(() => {
     if (currentSessionId && isAuthenticated) {
+      // 当前会话已在列表中则跳过，避免切换会话时列表闪烁
+      if (sessions.some(s => s.session_id === currentSessionId)) return
       loadSessions()
     }
-  }, [currentSessionId, isAuthenticated, loadSessions])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId, isAuthenticated])
 
   // ─── 搜索过滤 + 分组 ───
   const filtered = keyword.trim()
