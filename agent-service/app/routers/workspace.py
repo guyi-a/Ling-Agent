@@ -3,7 +3,9 @@
 支持文件上传、列表、下载、删除
 """
 import os
+import sys
 import mimetypes
+import subprocess
 from pathlib import Path
 from typing import List
 
@@ -11,21 +13,46 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from app.database.session import get_db
 from app.crud.session import session_crud
 from app.core.deps import get_current_user, get_current_user_flexible
 from app.core.config import settings
 from app.models.user import User
+from app.models.session import Session
+from app.models.project import Project
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
-def _get_session_workspace(session_id: str) -> Path:
+async def _get_session_workspace(session_id: str, db: AsyncSession, *, ensure: bool = False) -> Path:
+    """优先使用项目 slug 目录（物化项目），否则回退到 session_id 目录。
+    ensure=True 时自动创建目录（仅写入接口使用）。
+    """
+    result = await db.execute(
+        select(Session).where(Session.session_id == session_id)
+    )
+    session = result.scalars().first()
+    if session and session.project_id:
+        proj_result = await db.execute(
+            select(Project).where(Project.id == session.project_id)
+        )
+        project = proj_result.scalars().first()
+        if project and project.slug:
+            workspace = Path(settings.WORKSPACE_ROOT) / f"{project.id}_{project.slug}"
+            if ensure:
+                workspace.mkdir(parents=True, exist_ok=True)
+                (workspace / "uploads").mkdir(exist_ok=True)
+                (workspace / "outputs").mkdir(exist_ok=True)
+            return workspace
+
     workspace = Path(settings.WORKSPACE_ROOT) / session_id
-    (workspace / "uploads").mkdir(parents=True, exist_ok=True)
-    (workspace / "outputs").mkdir(parents=True, exist_ok=True)
+    if ensure:
+        (workspace / "uploads").mkdir(parents=True, exist_ok=True)
+        (workspace / "outputs").mkdir(parents=True, exist_ok=True)
     return workspace
 
 
@@ -47,7 +74,7 @@ async def upload_file(
     """上传文件到会话工作区的 uploads/ 目录"""
     await _check_session_owner(session_id, current_user, db)
 
-    workspace = _get_session_workspace(session_id)
+    workspace = await _get_session_workspace(session_id, db, ensure=True)
     uploads_dir = workspace / "uploads"
 
     # 读取文件内容（限制大小）
@@ -89,7 +116,7 @@ async def list_files(
     """列出会话工作区的文件（folder: 'uploads' | 'outputs' | '' 表示全部）"""
     await _check_session_owner(session_id, current_user, db)
 
-    workspace = _get_session_workspace(session_id)
+    workspace = await _get_session_workspace(session_id, db)
     folders = ["uploads", "outputs"] if not folder else [folder]
 
     result = []
@@ -100,13 +127,6 @@ async def list_files(
         for item in sorted(d.rglob("*")):
             if not item.is_file():
                 continue
-            # outputs/projects/ 下的文件由项目区展示，跳过
-            if f == "outputs":
-                try:
-                    item.relative_to(workspace / "outputs" / "projects")
-                    continue
-                except ValueError:
-                    pass
             stat = item.stat()
             rel = item.relative_to(workspace)
             result.append({
@@ -129,7 +149,7 @@ async def list_projects(
     """列出 outputs/projects/ 下的所有项目目录"""
     await _check_session_owner(session_id, current_user, db)
 
-    workspace = _get_session_workspace(session_id)
+    workspace = await _get_session_workspace(session_id, db)
     projects_dir = workspace / "outputs" / "projects"
 
     result = []
@@ -163,14 +183,14 @@ async def get_tree(
     """获取指定目录的树形结构（递归）"""
     await _check_session_owner(session_id, current_user, db)
 
-    workspace = _get_session_workspace(session_id).resolve()
+    workspace = (await _get_session_workspace(session_id, db)).resolve()
     target = (workspace / path).resolve()
 
     # 安全检查：必须在 workspace 内
     if not target.is_relative_to(workspace):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径越界")
     if not target.is_dir():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目录不存在")
+        return {"session_id": session_id, "root": path, "entries": []}
 
     def _build_tree(directory: Path, rel_base: Path) -> list:
         entries = []
@@ -203,13 +223,14 @@ async def get_tree(
 async def download_by_path(
     session_id: str,
     path: str,
+    inline: bool = False,
     current_user: User = Depends(get_current_user_flexible),
     db: AsyncSession = Depends(get_db),
 ):
     """通过相对路径下载工作区文件（支持嵌套目录）"""
     await _check_session_owner(session_id, current_user, db)
 
-    workspace = _get_session_workspace(session_id).resolve()
+    workspace = (await _get_session_workspace(session_id, db)).resolve()
     file_path = (workspace / path).resolve()
 
     # 安全检查：必须在 workspace 内
@@ -219,11 +240,16 @@ async def download_by_path(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
 
     media_type, _ = mimetypes.guess_type(str(file_path))
-    return FileResponse(
+    resp = FileResponse(
         path=str(file_path),
         filename=file_path.name,
         media_type=media_type or "application/octet-stream",
     )
+    if inline:
+        from urllib.parse import quote
+        encoded_name = quote(file_path.name)
+        resp.headers["Content-Disposition"] = f"inline; filename*=UTF-8''{encoded_name}"
+    return resp
 
 
 @router.get("/{session_id}/files/{folder}/{filename}")
@@ -240,7 +266,7 @@ async def download_file(
     if folder not in ("uploads", "outputs"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的目录")
 
-    workspace = _get_session_workspace(session_id)
+    workspace = await _get_session_workspace(session_id, db)
     file_path = workspace / folder / Path(filename).name  # Path.name 防止路径穿越
 
     if not file_path.exists() or not file_path.is_file():
@@ -268,7 +294,7 @@ async def delete_file(
     if folder not in ("uploads", "outputs"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的目录")
 
-    workspace = _get_session_workspace(session_id)
+    workspace = await _get_session_workspace(session_id, db)
     file_path = workspace / folder / Path(filename).name
 
     if not file_path.exists():
@@ -288,7 +314,7 @@ async def delete_by_path(
     """通过相对路径删除工作区文件（支持嵌套目录）"""
     await _check_session_owner(session_id, current_user, db)
 
-    workspace = _get_session_workspace(session_id).resolve()
+    workspace = (await _get_session_workspace(session_id, db)).resolve()
     file_path = (workspace / path).resolve()
 
     if not file_path.is_relative_to(workspace):
@@ -298,3 +324,26 @@ async def delete_by_path(
 
     file_path.unlink()
     return {"status": "success", "message": f"{path} 已删除"}
+
+
+@router.post("/{session_id}/open")
+async def open_in_finder(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """在系统文件管理器中打开工作区目录"""
+    await _check_session_owner(session_id, current_user, db)
+
+    workspace = await _get_session_workspace(session_id, db)
+    if not workspace.is_dir():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作区目录不存在")
+
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", str(workspace)])
+    elif sys.platform == "win32":
+        subprocess.Popen(["explorer", str(workspace)])
+    else:
+        subprocess.Popen(["xdg-open", str(workspace)])
+
+    return {"status": "success", "path": str(workspace)}

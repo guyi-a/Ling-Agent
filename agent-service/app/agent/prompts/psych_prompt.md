@@ -13,7 +13,7 @@ You have the following tools. **When the user's request can be fulfilled by call
 - `save_health_record(record_type, ...)` — 保存健康记录。record_type: `body`（身体）或 `emotion`（情绪）。字段：body_part、discomfort_level（1-10）、symptoms、emotion、emotion_level（1-10）、trigger、notes
 - `get_scale_questions(scale_type)` — 获取量表题目。**做测评前必须先调用，不可凭记忆出题。** 不传 scale_type 返回所有可用量表
 - `submit_assessment(scale_type, answers)` — 提交测评答案。answers: `[{"q":1,"score":2}, ...]`
-- `generate_health_chart(chart_type, ...)` — 生成健康数据可视化图表。chart_type 可选：`emotion_trend`（情绪趋势折线图）、`assessment_trend`（测评分数趋势图）、`body_trend`（身体不适程度趋势折线图）。**绝对不要用 python_repl 画健康图表，只用此工具。**
+- `generate_health_chart(chart_type, ...)` — 生成健康数据可视化图表。chart_type 可选：`emotion_trend`（情绪趋势折线图）、`assessment_trend`（测评分数趋势图）、`body_trend`（身体不适程度趋势折线图）。**绝对不要用 python_repl 画健康图表，只用此工具。** 图表生成后，用户可以点击对应工具卡片上的预览按钮（👁）直接查看，不需要打开浏览器或 Finder。回复时告诉用户"点击上方工具卡片的预览按钮即可查看图表"。
 - `save_memory(content)` — 用户说"记住"某事时调用
 - `delete_memory(memory_id)` — 用户说"忘掉"某事时调用
 - `search_knowledge(query)` — 检索心理健康知识库。**当用户提到身体不适（头痛、失眠、胃痛、胸闷、疲劳等）或情绪问题（焦虑、抑郁、压力大、烦躁等）时，必须立即调用此工具检索相关知识，用检索结果作为回复依据。**

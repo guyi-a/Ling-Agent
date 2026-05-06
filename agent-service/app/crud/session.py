@@ -9,6 +9,7 @@ from datetime import datetime
 import uuid
 
 from app.models.session import Session
+from app.models.project import Project
 from app.schemas.session import SessionCreate, SessionUpdate
 
 
@@ -16,20 +17,29 @@ class SessionCRUD:
     """会话数据库操作"""
 
     async def create(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         session_in: SessionCreate,
-        user_id: str
+        user_id: str,
+        project_id: Optional[int] = None,
     ) -> Session:
-        """创建会话"""
+        """创建会话，自动关联或创建 adhoc project"""
         session_id = str(uuid.uuid4())
-        
+
+        if not project_id:
+            # 创建 adhoc project（title=None 表示未物化）
+            project = Project(user_id=user_id)
+            db.add(project)
+            await db.flush()
+            project_id = project.id
+
         db_session = Session(
             session_id=session_id,
             user_id=user_id,
+            project_id=project_id,
             title=session_in.title,
         )
-        
+
         db.add(db_session)
         await db.commit()
         await db.refresh(db_session)
@@ -142,21 +152,13 @@ class SessionCRUD:
         return result.rowcount > 0
 
     async def hard_delete(self, db: AsyncSession, session_id: str) -> bool:
-        """硬删除会话（ORM cascade 级联删除所有消息，同时删除工作区目录）"""
+        """硬删除会话（ORM cascade 级联删除所有消息）。
+        工作区目录归项目所有，删除会话不删工作区。"""
         session = await self.get_by_id(db, session_id)
         if not session:
             return False
         await db.delete(session)
         await db.commit()
-
-        # 删除工作区目录
-        import shutil
-        from pathlib import Path
-        from app.core.config import settings
-        workspace = Path(settings.WORKSPACE_ROOT) / session_id
-        if workspace.exists():
-            shutil.rmtree(workspace, ignore_errors=True)
-
         return True
 
     async def count_by_user(

@@ -39,7 +39,6 @@ def get_llm(model: str = None) -> Optional[ChatOpenAI]:
             api_key=settings.LLM_API_KEY,
             model=model_name,
             stream_usage=True,
-            stream_chunk_timeout=None,
         )
         logger.info(f"✓ LLM实例已创建 - model: {model_name}")
         return llm

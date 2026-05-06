@@ -117,8 +117,17 @@ def detect_port(command: list[str]) -> Optional[int]:
 
 # ── 文件系统辅助 ──────────────────────────────────────────
 
+def _resolve_workspace(session_id: str) -> Path:
+    """解析 session_id 对应的实际 workspace 目录（优先项目 slug）"""
+    try:
+        from app.agent.tools.file_tool import get_session_workspace
+        return get_session_workspace(session_id, ensure=False)
+    except Exception:
+        return Path(settings.WORKSPACE_ROOT) / session_id
+
+
 def _proc_dir(session_id: str, name: str) -> Path:
-    return Path(settings.WORKSPACE_ROOT) / session_id / ".proc" / name
+    return _resolve_workspace(session_id) / ".proc" / name
 
 
 def _read_pid(proc_dir: Path) -> Optional[int]:
@@ -281,24 +290,41 @@ def stop_process(session_id: str, name: str) -> None:
 
 
 def restart_process(session_id: str, name: str) -> dict:
-    """重启进程：读 meta → 停 → 用同命令同端口启动"""
+    """重启进程：读 meta → 停旧进程 → 分配新端口 → 启动"""
     pdir = _proc_dir(session_id, name)
     meta = _read_meta(pdir)
     if not meta:
         raise KeyError(f"Process '{name}' not found in session {session_id[:8]}")
 
-    command = meta["command"]
+    command = list(meta["command"])
     workdir = Path(meta["workdir"])
-    port = meta.get("port")
+    old_port = meta.get("port")
 
-    # 停掉旧进程（不释放端口，因为要复用）
+    # 停掉旧进程并释放旧端口
     pid = _read_pid(pdir)
     if pid and _is_process_alive(pid):
         _kill_tree(pid)
+    if old_port:
+        release_port(old_port)
 
-    # 清空日志
+    # 分配新端口，替换命令中的旧端口
+    new_port = allocate_port()
+    if old_port:
+        old_str = str(old_port)
+        new_str = str(new_port)
+        for i, arg in enumerate(command):
+            if arg == old_str:
+                command[i] = new_str
+            elif arg.startswith("--port="):
+                command[i] = f"--port={new_str}"
+
+    # 更新 meta
+    meta["command"] = command
+    meta["port"] = new_port
+    (pdir / "meta.json").write_text(json.dumps(meta))
+
+    # 清空日志并启动
     log_file = pdir / "output.log"
-
     try:
         with open(log_file, "w") as lf:
             if platform.system() == "Windows":
@@ -319,18 +345,19 @@ def restart_process(session_id: str, name: str) -> dict:
                     start_new_session=True,
                 )
     except Exception as e:
+        release_port(new_port)
         raise RuntimeError(f"Failed to restart process: {e}") from e
 
     # 更新 PID
     (pdir / "pid").write_text(str(proc.pid))
 
-    logger.info(f"↻ Process restarted: {name} (pid={proc.pid}, port={port})")
+    logger.info(f"↻ Process restarted: {name} (pid={proc.pid}, port={new_port})")
 
     return {
         "name": name,
         "command": command,
         "workdir": str(workdir),
-        "port": port,
+        "port": new_port,
         "pid": proc.pid,
         "status": "running",
         "exit_code": None,
@@ -361,7 +388,7 @@ def get_process_status(session_id: str, name: str) -> dict:
 def list_processes(session_id: str) -> list[dict]:
     """列出 session 的所有进程"""
     _init_ports()
-    proc_root = Path(settings.WORKSPACE_ROOT) / session_id / ".proc"
+    proc_root = _resolve_workspace(session_id) / ".proc"
     if not proc_root.exists():
         return []
 
@@ -405,7 +432,7 @@ def get_logs(session_id: str, name: str, lines: int = 50) -> list[str]:
 
 def stop_all(session_id: str) -> None:
     """停止 session 的所有进程"""
-    proc_root = Path(settings.WORKSPACE_ROOT) / session_id / ".proc"
+    proc_root = _resolve_workspace(session_id) / ".proc"
     if not proc_root.exists():
         return
 

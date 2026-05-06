@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useMemo } from 'react'
 import { RefreshCw, ExternalLink, X } from 'lucide-react'
 
 interface PreviewPanelProps {
@@ -10,6 +10,8 @@ interface PreviewPanelProps {
 export default function PreviewPanel({ url, title, onClose }: PreviewPanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
+  const isPdf = useMemo(() => /\.pdf/i.test(url), [url])
+
   const handleRefresh = useCallback(() => {
     if (iframeRef.current) {
       iframeRef.current.src = iframeRef.current.src
@@ -17,10 +19,15 @@ export default function PreviewPanel({ url, title, onClose }: PreviewPanelProps)
   }, [])
 
   const handleOpenExternal = useCallback(() => {
-    // 从代理 URL 提取端口，构建直接访问地址
-    const match = url.match(/\/api\/preview\/(\d+)/)
-    if (match) {
-      window.open(`http://localhost:${match[1]}/`, '_blank')
+    if (url.startsWith('blob:')) {
+      window.open(url, '_blank')
+    } else if (url.startsWith('/api/')) {
+      window.open(url, '_blank')
+    } else {
+      const match = url.match(/\/api\/preview\/(\d+)/)
+      if (match) {
+        window.open(`http://localhost:${match[1]}/`, '_blank')
+      }
     }
   }, [url])
 
@@ -32,13 +39,15 @@ export default function PreviewPanel({ url, title, onClose }: PreviewPanelProps)
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
           {title}
         </span>
-        <button
-          onClick={handleRefresh}
-          className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-          title="刷新"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+        {!isPdf && (
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="刷新"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           onClick={handleOpenExternal}
           className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
@@ -55,15 +64,23 @@ export default function PreviewPanel({ url, title, onClose }: PreviewPanelProps)
         </button>
       </div>
 
-      {/* iframe */}
+      {/* Content */}
       <div className="flex-1 relative">
-        <iframe
-          ref={iframeRef}
-          src={url}
-          className="absolute inset-0 w-full h-full border-0"
-          title={title}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
+        {isPdf ? (
+          <embed
+            src={url}
+            type="application/pdf"
+            className="absolute inset-0 w-full h-full"
+          />
+        ) : (
+          <iframe
+            ref={iframeRef}
+            src={url}
+            className="absolute inset-0 w-full h-full border-0"
+            title={title}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          />
+        )}
       </div>
     </div>
   )

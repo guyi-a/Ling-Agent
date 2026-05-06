@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 
 export interface MessagePart {
-  type: 'text' | 'tool' | 'image' | 'handoff'
+  type: 'text' | 'tool' | 'image' | 'file' | 'handoff'
   content?: string  // for text
   imageUrl?: string  // for image (preview URL or workspace path)
   toolName?: string  // for tool
@@ -235,6 +235,9 @@ export function useSSEChat() {
                 return { ...msg, parts }
               })
             )
+            if (parsed.tool_name === 'materialize_project') {
+              window.dispatchEvent(new Event('project-changed'))
+            }
           } else if (event === 'handoff') {
             accumulated = ''
             setMessages((prev) =>

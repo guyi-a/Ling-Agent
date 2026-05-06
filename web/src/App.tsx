@@ -14,6 +14,7 @@ import SettingsPage from '@/pages/settings/SettingsPage'
 import AppsPage from '@/pages/apps/AppsPage'
 import DiaryPage from '@/pages/diary/DiaryPage'
 import AssessmentPage from '@/pages/assessment/AssessmentPage'
+import ProjectDetailPage from '@/pages/project/ProjectDetailPage'
 
 const queryClient = new QueryClient()
 
@@ -115,6 +116,14 @@ function App() {
             element={
               <PrivateRoute>
                 <AssessmentPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/projects/:projectId"
+            element={
+              <PrivateRoute>
+                <ProjectDetailPage />
               </PrivateRoute>
             }
           />

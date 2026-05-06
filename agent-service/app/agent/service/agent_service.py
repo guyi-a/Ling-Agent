@@ -299,12 +299,13 @@ class AgentService:
         # 收集文件引用
         file_references = []
 
-        workspace_root = Path(settings.WORKSPACE_ROOT).resolve()
+        from app.agent.tools.file_tool import get_session_workspace
+        workspace = get_session_workspace(session_id, ensure=False)
 
         for att in attachments:
             att_type = att.get("type", "file")
             att_path = att.get("path", "")
-            full_path = workspace_root / session_id / att_path
+            full_path = workspace / att_path
 
             if att_type == "image":
                 # 图片：OCR 提取文字后嵌入消息文本
@@ -473,9 +474,24 @@ class AgentService:
                     if kind == "on_chat_model_start":
                         node = event.get("metadata", {}).get("langgraph_node", "")
                         current_node = node
+                        logger.info(f"🔄 model_start | node={node!r}, last_handoff_to={last_handoff_to!r}")
                         # 如果 sub-agent 刚回来，supervisor 再次启动 → 发出 "back" handoff 徽章
                         if last_handoff_to is not None:
-                            if node in ("agent", "supervisor"):
+                            if node != "model":
+                                # 先把 sub-agent 累积的文本存入 DB（保证历史顺序正确）
+                                unsaved = full_response.replace("__END__", "").strip()
+                                if unsaved and not last_round_saved_as_tool_call:
+                                    await self._save_assistant_message(db, session_id, unsaved)
+                                    full_response = ""
+                                try:
+                                    await message_crud.create(db, MessageCreate(
+                                        session_id=session_id,
+                                        role="assistant",
+                                        content="",
+                                        extra_data={"handoff": {"to": last_handoff_to, "direction": "back"}}
+                                    ))
+                                except Exception as e:
+                                    logger.warning(f"保存 back handoff 到 DB 失败: {e}")
                                 yield {"type": "handoff", "to": last_handoff_to, "direction": "back"}
                                 last_handoff_to = None
                                 sub_agent_responded = True
@@ -606,11 +622,13 @@ class AgentService:
                                 sub_agent_responded = False
                             logger.info(f"Handoff {direction} → {target}")
                             # 持久化 handoff 到 DB，刷新后可从历史还原
+                            # 把 supervisor 的路由文本保存到 handoff 消息中
+                            handoff_text = current_round_text.strip() if current_round_text else ""
                             try:
                                 await message_crud.create(db, MessageCreate(
                                     session_id=session_id,
                                     role="assistant",
-                                    content="",
+                                    content=handoff_text,
                                     extra_data={"handoff": {"to": target, "direction": direction}}
                                 ))
                             except Exception as e:
@@ -744,10 +762,11 @@ class AgentService:
                         decisions = [{"type": "approve"} for _ in range(num_pending)]
                         run_input = Command(resume={"decisions": decisions})
 
-            # 保存最终 assistant 消息
+            # 保存最终 assistant 消息（过滤 __END__ 标记）
             assistant_message_id = None
-            if full_response:
-                assistant_message_id = await self._save_assistant_message(db, session_id, full_response)
+            final_text = full_response.replace("__END__", "").strip() if full_response else ""
+            if final_text:
+                assistant_message_id = await self._save_assistant_message(db, session_id, final_text)
 
             # 压缩检查
             if last_input_tokens > 0:

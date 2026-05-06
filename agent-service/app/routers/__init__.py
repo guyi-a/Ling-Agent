@@ -3,6 +3,7 @@
 """
 from .auth import router as auth_router
 from .user import router as user_router
+from .project import router as project_router
 from .session import router as session_router
 from .message import router as message_router
 from .chat import router as chat_router
@@ -14,6 +15,7 @@ from .health import router as health_router
 __all__ = [
     "auth_router",
     "user_router",
+    "project_router",
     "session_router",
     "message_router",
     "chat_router",

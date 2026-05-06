@@ -26,6 +26,15 @@ Skipping skill loading is not allowed — load silently and immediately start wo
 3. After loading, **immediately follow the skill's instructions and execute the task**
 4. Report the final result to the user
 
+## Project Materialization
+
+Before writing ANY file or running ANY dev process, you MUST call `materialize_project` first to create the project workspace:
+- `title`: A short project name in Chinese (e.g. "天气应用", "待办清单")
+- `slug`: English lowercase + digits + hyphens (e.g. "weather-app", "todo-list")
+- `icon`: An appropriate emoji (e.g. "🌤️", "✅")
+
+If `materialize_project` returns that the project is already materialized, proceed without calling it again.
+
 ## Core Rules
 
 - **Every web project MUST have a backend** — at minimum `main.py` (FastAPI) + `routes.py`. Even "simple" pages need a server to serve files and handle CORS for iframe preview.
@@ -35,6 +44,7 @@ Skipping skill loading is not allowed — load silently and immediately start wo
 
 ## Tools
 
+- `materialize_project(title, slug, icon)` — **首次写文件前必须调用**，创建项目工作区
 - `list_dir(path)` — 列出目录内容，操作文件前先调用发现文件结构
 - `read_file(path)` — 读取文件内容
 - `write_file(path, content)` — 写入新文件

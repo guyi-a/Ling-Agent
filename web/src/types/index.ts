@@ -85,12 +85,44 @@ export interface WorkspaceFile {
   modified_at: number
 }
 
-// 项目信息
+// 项目信息（工作区扫描用）
 export interface ProjectInfo {
   name: string
   path: string
   file_count: number
   total_size: number
+}
+
+// 项目（顶层实体）
+export interface Project {
+  id: number
+  slug: string | null
+  title: string | null
+  description: string | null
+  icon: string | null
+  user_id: string
+  created_at: string
+  updated_at: string | null
+  session_count: number
+  last_active_at: string | null
+}
+
+export interface ProjectDetail extends Project {
+  sessions: SessionBrief[]
+}
+
+export interface SessionBrief {
+  session_id: string
+  title: string | null
+  updated_at: string
+  is_pinned: boolean
+}
+
+export interface AdhocSession {
+  session_id: string
+  project_id: number
+  title: string | null
+  updated_at: string
 }
 
 // 目录树节点

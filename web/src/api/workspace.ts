@@ -58,4 +58,9 @@ export const workspaceApi = {
     )
     return data.entries
   },
+
+  // 在系统文件管理器中打开
+  openInFinder: async (sessionId: string) => {
+    await apiClient.post(`/api/workspace/${sessionId}/open`)
+  },
 }

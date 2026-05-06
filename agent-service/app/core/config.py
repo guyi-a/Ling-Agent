@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
     LLM_MODEL: str = "glm-4.7"
     LLM_MODEL_ROUTER: str = "glm-4.7"
-    LLM_MODEL_DEVELOPER: str = "glm-4.7"
+    LLM_MODEL_DEVELOPER: str = "glm-5.1"
     LLM_MODEL_GENERAL: str = "glm-4.7"
     LLM_MODEL_PSYCH: str = "glm-4.7"
     LLM_MODEL_DATA: str = "glm-4.7"

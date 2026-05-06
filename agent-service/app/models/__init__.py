@@ -5,6 +5,7 @@
 from .base import Base
 from .user import User
 from .account import Account
+from .project import Project
 from .session import Session
 from .message import Message
 from .health_record import HealthRecord
@@ -15,6 +16,7 @@ __all__ = [
     "Base",
     "User",
     "Account",
+    "Project",
     "Session",
     "Message",
     "HealthRecord",

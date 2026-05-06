@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Search, Ban, Shield, Zap, Wrench } from 'lucide-react'
+import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Ban, Shield, Zap, Wrench, FolderOpen, Eye, Globe, ExternalLink, RotateCw } from 'lucide-react'
 import Logo from '@/components/Logo'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -9,10 +9,8 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useSSEChat, getMessageContent, type MessagePart } from '@/hooks/useSSEChat'
 import { useThemeStore } from '@/stores/themeStore'
 import SessionSidebar from '@/components/SessionSidebar'
-import WorkspacePanel from '@/components/WorkspacePanel'
 import PreviewPanel from '@/components/PreviewPanel'
 import ApprovalCard from '@/components/ApprovalCard'
-import FileSelector from '@/components/FileSelector'
 import AttachmentChip from '@/components/AttachmentChip'
 import MessageActions from '@/components/MessageActions'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -23,13 +21,13 @@ import { chatApi } from '@/api/chat'
 import { messagesApi } from '@/api/messages'
 import { sessionsApi } from '@/api/sessions'
 import { workspaceApi } from '@/api/workspace'
+import { devApi } from '@/api/dev'
 import type { WorkspaceFile } from '@/types'
+import { savePendingFiles, loadPendingFiles, clearPendingFiles } from '@/utils/pendingFilesDB'
 
 interface PastedImage {
   file: File
   previewUrl: string
-  uploading: boolean
-  uploadedPath?: string
 }
 
 
@@ -103,12 +101,13 @@ function ToolInputDisplay({ data, isDark }: { data: Record<string, any>; isDark:
 
 export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileUploadRef = useRef<HTMLInputElement>(null)
   const [sendDisabled, setSendDisabled] = useState(true)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [sessionTitle, setSessionTitle] = useState<string>('')
   const [selectedFiles, setSelectedFiles] = useState<WorkspaceFile[]>([])
-  const [fileSelectorOpen, setFileSelectorOpen] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -125,9 +124,9 @@ export default function ChatPage() {
   const [deleteAfterDialogOpen, setDeleteAfterDialogOpen] = useState(false)
   const [deletingAfterMessageId, setDeletingAfterMessageId] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [activePorts, setActivePorts] = useState<Set<number>>(new Set())
   const [sidebarWidth, setSidebarWidth] = useState(256)
-  const [workspaceWidth, setWorkspaceWidth] = useState(320)
-  const [isDragging, setIsDragging] = useState<'left' | 'right' | null>(null)
+  const [isDragging, setIsDragging] = useState<'left' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const loadIdRef = useRef(0)
   const { messages, isStreaming, currentSessionId, setCurrentSessionId, sendMessage, stopStreaming, setMessages, reconnect } = useSSEChat()
@@ -138,6 +137,16 @@ export default function ChatPage() {
   const reconnectAttemptedRef = useRef(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const urlSessionId = searchParams.get('session')
+  const urlProjectId = searchParams.get('project')
+
+  const refreshActivePorts = useCallback(async (sessionId: string) => {
+    try {
+      const procs = await devApi.listProcesses(sessionId)
+      setActivePorts(new Set(procs.filter(p => p.status === 'running' && p.port).map(p => p.port!)))
+    } catch {
+      setActivePorts(new Set())
+    }
+  }, [])
 
   // 加载会话历史消息
   const loadSessionHistory = useCallback(async (sessionId: string) => {
@@ -162,8 +171,12 @@ export default function ChatPage() {
         // 检查是否有待审批状态
         const pendingApproval = extraData.pending_approval || null
 
-        // handoff 消息：还原为 handoff part
+        // handoff 消息：还原为 handoff part（含路由文本）
         if (msg.role === 'assistant' && extraData.handoff) {
+          const handoffContent = (msg.content || '').replace(/__END__/g, '').trim()
+          if (handoffContent) {
+            parts.push({ type: 'text' as const, content: handoffContent })
+          }
           parts.push({
             type: 'handoff' as const,
             agentName: extraData.handoff.to,
@@ -177,7 +190,8 @@ export default function ChatPage() {
         if (msg.role === 'assistant' && extraData.tool_calls && Array.isArray(extraData.tool_calls) && !pendingApproval) {
           // assistant 消息带 tool_calls：先添加文本（如果有），然后添加工具
           if (msg.content) {
-            parts.push({ type: 'text' as const, content: msg.content })
+            const cleanContent = msg.content.replace(/__END__/g, '').trim()
+            if (cleanContent) parts.push({ type: 'text' as const, content: cleanContent })
           }
           extraData.tool_calls.forEach((tc: any) => {
             // 如果是 Skill 工具，从 args 中提取实际技能名
@@ -195,14 +209,15 @@ export default function ChatPage() {
               toolInput: tc.args,
             })
           })
-        } else {
-          // 普通消息 / 有 pending_approval 时只添加文本
+        } else if (!extraData.handoff) {
+          // 普通消息 / 有 pending_approval 时只添加文本（过滤 __END__）
           if (msg.content) {
-            parts.push({ type: 'text' as const, content: msg.content })
+            const cleanContent = msg.content.replace(/__END__/g, '').trim()
+            if (cleanContent) parts.push({ type: 'text' as const, content: cleanContent })
           }
         }
 
-        // 用户消息：从 extra_data.attachments 恢复图片缩略图
+        // 用户消息：从 extra_data.attachments 恢复附件展示
         if (msg.role === 'user' && extraData.attachments && Array.isArray(extraData.attachments)) {
           const imgToken = localStorage.getItem('access_token') || ''
           for (const att of extraData.attachments) {
@@ -210,7 +225,12 @@ export default function ChatPage() {
               parts.push({
                 type: 'image' as const,
                 imageUrl: `/api/workspace/${sessionId}/download?path=${encodeURIComponent(att.path)}&token=${encodeURIComponent(imgToken)}`,
-                content: att.path, // 保存原始路径，用于重新生成时传递 attachments
+                content: att.path,
+              })
+            } else if (att.type === 'file' && att.path) {
+              parts.push({
+                type: 'file' as const,
+                content: att.path,
               })
             }
           }
@@ -301,7 +321,6 @@ export default function ChatPage() {
     const items = e.clipboardData?.items
     if (!items) return
 
-    // 收集图片文件
     const imageFiles: File[] = []
     for (const item of Array.from(items)) {
       if (!item.type.startsWith('image/')) continue
@@ -312,44 +331,11 @@ export default function ChatPage() {
 
     e.preventDefault()
 
-    // 如果没有 session，先创建一个
-    let sessionId = selectedSessionId || currentSessionId
-    if (!sessionId) {
-      try {
-        const newSession = await sessionsApi.create('')
-        sessionId = newSession.session_id
-        setSelectedSessionId(sessionId)
-        setCurrentSessionId(sessionId)
-      } catch (err) {
-        console.error('创建会话失败:', err)
-        return
-      }
-    }
-
     for (const file of imageFiles) {
       const previewUrl = URL.createObjectURL(file)
-
-      // 先添加预览（uploading 状态）
-      const newImage: PastedImage = { file, previewUrl, uploading: true }
-      setPastedImages(prev => [...prev, newImage])
-
-      // 上传到后端
-      try {
-        const result = await workspaceApi.upload(sessionId, file)
-        setPastedImages(prev =>
-          prev.map(img =>
-            img.previewUrl === previewUrl
-              ? { ...img, uploading: false, uploadedPath: result.path }
-              : img
-          )
-        )
-      } catch (err) {
-        console.error('图片上传失败:', err)
-        URL.revokeObjectURL(previewUrl)
-        setPastedImages(prev => prev.filter(img => img.previewUrl !== previewUrl))
-      }
+      setPastedImages(prev => [...prev, { file, previewUrl, uploading: false }])
     }
-  }, [selectedSessionId, currentSessionId, setCurrentSessionId])
+  }, [])
 
   // 移除粘贴的图片
   const removePastedImage = useCallback((previewUrl: string) => {
@@ -357,57 +343,91 @@ export default function ChatPage() {
     setPastedImages(prev => prev.filter(img => img.previewUrl !== previewUrl))
   }, [])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const message = inputRef.current?.value?.trim() || ''
-    if (!message && pastedImages.filter(p => p.uploadedPath).length === 0) return
+    const hasPendingAttachments = pendingFiles.length > 0 || pastedImages.length > 0
+    if (!message && !hasPendingAttachments) return
     if (isStreaming) return
 
-    // 构建 attachments 参数
-    const attachments = selectedFiles.map(file => {
+    let sid = selectedSessionId || currentSessionId
+
+    // 有待上传内容时，确保 session 存在
+    if (hasPendingAttachments && !sid) {
+      try {
+        const pid = urlProjectId ? Number(urlProjectId) : undefined
+        const newSession = await sessionsApi.create('', pid)
+        sid = newSession.session_id
+        setSelectedSessionId(sid)
+        setCurrentSessionId(sid)
+      } catch { return }
+    }
+
+    // 上传待上传文件
+    const uploadedFiles: WorkspaceFile[] = [...selectedFiles]
+    if (sid) {
+      for (const file of pendingFiles) {
+        try {
+          await workspaceApi.upload(sid, file)
+          uploadedFiles.push({ name: file.name, path: `uploads/${file.name}`, size: file.size, modified: new Date().toISOString() })
+        } catch { /* ignore */ }
+      }
+    }
+
+    // 上传粘贴图片
+    const uploadedImages: { previewUrl: string; uploadedPath: string }[] = []
+    if (sid) {
+      for (const img of pastedImages) {
+        try {
+          const result = await workspaceApi.upload(sid, img.file)
+          uploadedImages.push({ previewUrl: img.previewUrl, uploadedPath: result.path })
+        } catch { /* ignore */ }
+      }
+    }
+
+    // 构建 attachments
+    const fileAttachments = uploadedFiles.map(file => {
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
       const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)
-
-      return {
-        type: isImage ? 'image' : 'file' as 'image' | 'file',
-        path: file.path,
-        size: file.size
-      }
+      return { type: isImage ? 'image' : 'file' as 'image' | 'file', path: file.path, size: file.size }
     })
+    const imageAttachments = uploadedImages.map(img => ({ type: 'image' as const, path: img.uploadedPath }))
+    const allAttachments = [...fileAttachments, ...imageAttachments]
 
-    // 合并粘贴图片的 attachments
-    const imageAttachments = pastedImages
-      .filter(img => img.uploadedPath)
-      .map(img => ({ type: 'image' as const, path: img.uploadedPath! }))
-
-    const allAttachments = [...attachments, ...imageAttachments]
-
-    // 构建图片 parts 用于在用户消息气泡中显示缩略图
-    const imgParts: MessagePart[] = pastedImages
-      .filter(img => img.uploadedPath)
-      .map(img => ({ type: 'image' as const, imageUrl: img.previewUrl, content: img.uploadedPath }))
-
-    // 从 selectedFiles 中提取图片
-    const selectedImgParts: MessagePart[] = selectedFiles
-      .filter(f => {
-        const ext = f.name.split('.').pop()?.toLowerCase() || ''
-        return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)
-      })
+    // 构建图片预览 parts（用服务器 URL，不用 blob URL）
+    const tk = localStorage.getItem('access_token') || ''
+    const imgParts: MessagePart[] = uploadedImages.map(img => ({
+      type: 'image' as const,
+      imageUrl: `/api/workspace/${sid}/download?path=${encodeURIComponent(img.uploadedPath)}&token=${encodeURIComponent(tk)}`,
+      content: img.uploadedPath,
+    }))
+    const fileImgParts: MessagePart[] = uploadedFiles
+      .filter(f => ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(f.name.split('.').pop()?.toLowerCase() || ''))
       .map(f => ({
         type: 'image' as const,
-        imageUrl: `/api/workspace/${selectedSessionId || currentSessionId}/files/uploads/${f.name}`,
+        imageUrl: `/api/workspace/${sid}/download?path=${encodeURIComponent(f.path)}&token=${encodeURIComponent(tk)}`,
+        content: f.path,
       }))
-
-    const allImageParts = [...imgParts, ...selectedImgParts]
+    // 文件附件 parts（非图片文件显示在消息气泡）
+    const fileParts: MessagePart[] = uploadedFiles
+      .filter(f => !['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(f.name.split('.').pop()?.toLowerCase() || ''))
+      .map(f => ({
+        type: 'file' as const,
+        content: f.path,
+      }))
+    const allExtraParts = [...imgParts, ...fileImgParts, ...fileParts]
 
     sendMessage(
-      message || '(图片)',
+      message || '(附件)',
       allAttachments.length > 0 ? allAttachments : undefined,
-      selectedSessionId || undefined,
-      allImageParts.length > 0 ? allImageParts : undefined
+      sid || selectedSessionId || undefined,
+      allExtraParts.length > 0 ? allExtraParts : undefined
     )
     if (inputRef.current) inputRef.current.value = ''
     setSendDisabled(true)
     setSelectedFiles([])
+    setPendingFiles([])
+    clearPendingFiles()
+    pastedImages.forEach(img => URL.revokeObjectURL(img.previewUrl))
     setPastedImages([])
   }
 
@@ -551,6 +571,11 @@ export default function ChatPage() {
     }
   }
 
+  // 从 IndexedDB 恢复暂存文件
+  useEffect(() => {
+    loadPendingFiles().then(files => { if (files.length) setPendingFiles(files) })
+  }, [])
+
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -608,6 +633,7 @@ export default function ChatPage() {
       setIsLoadingHistory(true)
       await loadSessionHistory(sessionId)
       setIsLoadingHistory(false)
+      refreshActivePorts(sessionId)
       // 获取会话标题
       try {
         const session = await sessionsApi.getById(sessionId)
@@ -627,24 +653,38 @@ export default function ChatPage() {
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming) {
       setSidebarRefresh(n => n + 1)
-      // 刷新会话标题（首次对话后后端会生成标题）
       const sid = selectedSessionId ?? currentSessionId
       if (sid) {
         sessionsApi.getById(sid).then(s => setSessionTitle(s.title || '')).catch(() => {})
+        refreshActivePorts(sid)
       }
     }
     prevStreamingRef.current = isStreaming
   }, [isStreaming, selectedSessionId, currentSessionId])
 
+  // 项目物化后实时刷新侧边栏
+  useEffect(() => {
+    const handler = () => setSidebarRefresh(n => n + 1)
+    window.addEventListener('project-changed', handler)
+    return () => window.removeEventListener('project-changed', handler)
+  }, [])
+
   // 从 URL 参数 ?session=xxx 加载指定会话（SessionsPage 跳转过来）
+  // ?msg=xxx 时自动发送首条消息（从项目详情页跳转过来）
   const urlSessionHandled = useRef(false)
+  const urlMsg = searchParams.get('msg')
   useEffect(() => {
     if (!urlSessionId || urlSessionHandled.current) return
-    if (!token) return  // 等 token 恢复
+    if (!token) return
     urlSessionHandled.current = true
-    // 清除 URL 参数，避免刷新重复触发
+    const pendingMsg = urlMsg || null
     setSearchParams({}, { replace: true })
     handleSessionSelect(urlSessionId)
+    if (pendingMsg) {
+      setTimeout(() => {
+        sendMessage(pendingMsg, undefined, urlSessionId)
+      }, 300)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSessionId, token])
 
@@ -661,19 +701,15 @@ export default function ChatPage() {
   }, [])
 
   // 拖拽调整面板宽度
-  const handleResizeStart = useCallback((side: 'left' | 'right') => (e: ReactMouseEvent) => {
+  const handleResizeStart = useCallback((e: ReactMouseEvent) => {
     e.preventDefault()
-    setIsDragging(side)
+    setIsDragging('left')
     const startX = e.clientX
-    const startWidth = side === 'left' ? sidebarWidth : workspaceWidth
+    const startWidth = sidebarWidth
 
     const onMouseMove = (ev: globalThis.MouseEvent) => {
       const delta = ev.clientX - startX
-      if (side === 'left') {
-        setSidebarWidth(Math.min(400, Math.max(200, startWidth + delta)))
-      } else {
-        setWorkspaceWidth(Math.min(500, Math.max(240, startWidth - delta)))
-      }
+      setSidebarWidth(Math.min(400, Math.max(200, startWidth + delta)))
     }
 
     const onMouseUp = () => {
@@ -684,7 +720,7 @@ export default function ChatPage() {
 
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
-  }, [sidebarWidth, workspaceWidth])
+  }, [sidebarWidth])
 
   return (
     <div className="h-screen flex bg-gray-50 dark:bg-[#1a1a24]">
@@ -698,13 +734,14 @@ export default function ChatPage() {
         currentSessionId={selectedSessionId ?? currentSessionId}
         onSelectSession={handleSessionSelect}
         refreshTrigger={sidebarRefresh}
+        onSearchClick={() => setSearchOpen(true)}
         style={{ width: sidebarWidth }}
       />
 
       {/* 左侧拖拽手柄 */}
       <div className="relative flex-shrink-0" style={{ width: 0 }}>
         <div
-          onMouseDown={handleResizeStart('left')}
+          onMouseDown={handleResizeStart}
           className="absolute inset-y-0 -left-[4px] w-[8px] cursor-col-resize z-10 group"
         >
           <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] opacity-0 group-hover:opacity-100 bg-primary-400/50 transition-opacity" />
@@ -723,17 +760,18 @@ export default function ChatPage() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors border border-gray-200 dark:border-gray-700/60"
-                title="全局搜索 (⌘K)"
-              >
-                <Search className="w-4 h-4" />
-                <span className="hidden sm:inline text-xs">搜索</span>
-                <kbd className="hidden sm:inline-flex items-center px-1 py-0.5 text-[10px] font-medium text-gray-400 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-gray-700/60 ml-1">
-                  ⌘K
-                </kbd>
-              </button>
+              {(selectedSessionId || currentSessionId) && (
+                <button
+                  onClick={() => {
+                    const sid = selectedSessionId ?? currentSessionId
+                    if (sid) workspaceApi.openInFinder(sid).catch(() => {})
+                  }}
+                  className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                  title="在 Finder 中打开"
+                >
+                  <FolderOpen className="w-5 h-5" />
+                </button>
+              )}
               <button
                 onClick={toggleTheme}
                 className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
@@ -759,13 +797,13 @@ export default function ChatPage() {
           <PreviewPanel
             url={previewUrl}
             title={previewTitle}
-            onClose={() => { setPreviewUrl(null); setPreviewTitle('') }}
+            onClose={() => { if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); setPreviewTitle('') }}
           />
         )}
 
         {/* Messages — 预览时隐藏 */}
         <main className={`${previewUrl ? 'hidden' : 'flex-1'} overflow-y-auto p-4 relative`}>
-          <div className="max-w-4xl mx-auto space-y-4 relative z-10">
+          <div className="max-w-4xl mx-auto space-y-8 relative z-10">
             {isLoadingHistory ? (
               <div className="space-y-4 py-8 animate-pulse">
                 {[...Array(4)].map((_, i) => (
@@ -779,7 +817,7 @@ export default function ChatPage() {
               </div>
             ) : messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 py-16">
-                <div className="mx-auto mb-4 opacity-15">
+                <div className="flex justify-center mb-4 opacity-15">
                   <Logo size={56} />
                 </div>
                 <p className="mb-8">开始与 AI 助手对话</p>
@@ -905,6 +943,43 @@ export default function ChatPage() {
                                 ))}
                               </div>
                             )}
+                            {/* 文件附件 */}
+                            {msg.parts.some(p => p.type === 'file') && (
+                              <div className="mb-2 space-y-1">
+                                {msg.parts.filter(p => p.type === 'file').map((p, i) => {
+                                  const filePath = p.content || ''
+                                  const fileName = filePath.split('/').pop() || filePath
+                                  const canPreview = /\.(pdf|html?)$/i.test(fileName)
+                                  return (
+                                    <div
+                                      key={i}
+                                      className={`flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 ${canPreview ? 'cursor-pointer hover:text-primary-600 dark:hover:text-primary-400' : ''}`}
+                                      onClick={canPreview ? async () => {
+                                        const sid = selectedSessionId || currentSessionId
+                                        if (!sid) return
+                                        const fullPath = filePath.includes('/') ? filePath : `uploads/${filePath}`
+                                        const isPdf = /\.pdf$/i.test(fullPath)
+                                        if (isPdf) {
+                                          const tk = localStorage.getItem('access_token') || ''
+                                          setPreviewUrl(`/api/workspace/${sid}/download?path=${encodeURIComponent(fullPath)}&inline=true&token=${encodeURIComponent(tk)}`)
+                                        } else {
+                                          try {
+                                            const { default: apiClient } = await import('@/api/client')
+                                            const resp = await apiClient.get(`/api/workspace/${sid}/download`, { params: { path: fullPath }, responseType: 'blob' })
+                                            const blob = new Blob([resp.data], { type: 'text/html' })
+                                            setPreviewUrl(URL.createObjectURL(blob))
+                                          } catch { return }
+                                        }
+                                        setPreviewTitle(fileName)
+                                      } : undefined}
+                                    >
+                                      <Paperclip className="w-3 h-3 flex-shrink-0" />
+                                      <span>{fileName}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                             <p className="whitespace-pre-wrap">{getMessageContent(msg)}</p>
                             {/* 用户消息操作菜单 */}
                             {!msg.isStreaming && msg.messageId && (
@@ -951,10 +1026,17 @@ export default function ChatPage() {
 
                             if (part.type === 'tool') {
                               const toolKey = `${msg.id}-${partIdx}`
-                              const defaultCollapsed = part.isSkill || /^(read_file|list_dir)$/.test(part.toolName || '')
+                              const defaultCollapsed = part.isSkill || /^(read_file|list_dir|materialize_project|get_health_records)$/.test(part.toolName || '')
                               const toggled = collapsedTools.has(toolKey)
                               const isExpanded = defaultCollapsed ? toggled : !toggled
                               const canExpand = part.toolStatus === 'done' && (part.toolInput || part.toolOutput)
+                              const chartHtmlMatch = part.toolName === 'generate_health_chart' && part.toolStatus === 'done' && part.toolOutput?.match(/:\s*(outputs\/charts\/\S+\.html)/i)
+                              const _outputSource = part.toolName === 'python_repl' ? `${part.toolOutput || ''}\n${part.toolInput?.code || ''}` : (part.toolOutput || '')
+                              const outputFileMatch = part.toolStatus === 'done' && /^(python_repl|run_command)$/.test(part.toolName || '') && _outputSource.match(/(outputs\/[^\s,，。"'()]+\.(?:pdf|html?))/i)
+                              const previewFilePath = part.toolInput?.path || chartHtmlMatch?.[1] || outputFileMatch?.[1]
+                              const hasPreview = (part.toolName === 'write_file' && part.toolStatus === 'done' && /\.(?:html?|pdf)$/i.test(part.toolInput?.path || ''))
+                                || !!chartHtmlMatch
+                                || !!outputFileMatch
 
                               return (
                                 <div key={partIdx} className="my-2 not-prose">
@@ -1004,8 +1086,38 @@ export default function ChatPage() {
                                         </>
                                       )}
                                     </span>
+                                    {hasPreview && (
+                                      <button
+                                        className="ml-auto p-1 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
+                                        title="预览"
+                                        onClick={async (e) => {
+                                          e.stopPropagation()
+                                          const sid = selectedSessionId || currentSessionId
+                                          if (sid && previewFilePath) {
+                                            try {
+                                              const isPdf = /\.pdf$/i.test(previewFilePath)
+                                              if (isPdf) {
+                                                const tk = localStorage.getItem('access_token') || ''
+                                                setPreviewUrl(`/api/workspace/${sid}/download?path=${encodeURIComponent(previewFilePath)}&inline=true&token=${encodeURIComponent(tk)}`)
+                                              } else {
+                                                const { default: apiClient } = await import('@/api/client')
+                                                const resp = await apiClient.get(
+                                                  `/api/workspace/${sid}/download`,
+                                                  { params: { path: previewFilePath }, responseType: 'blob' }
+                                                )
+                                                const blob = new Blob([resp.data], { type: 'text/html' })
+                                                setPreviewUrl(URL.createObjectURL(blob))
+                                              }
+                                              setPreviewTitle(previewFilePath.split('/').pop() || 'Preview')
+                                            } catch { /* ignore */ }
+                                          }
+                                        }}
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                    )}
                                     {canExpand && (
-                                      <ChevronRight className={`w-4 h-4 ml-auto text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                      <ChevronRight className={`w-4 h-4 ${!hasPreview ? 'ml-auto' : ''} text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                                     )}
                                   </div>
                                   {isExpanded && (
@@ -1069,6 +1181,77 @@ export default function ChatPage() {
                             return null
                           })}
                         </div>
+
+                        {/* 应用预览入口 */}
+                        {!msg.isStreaming && (() => {
+                          const apps = msg.parts
+                            .filter(p => p.type === 'tool' && p.toolName === 'dev_run' && p.toolStatus === 'done' && p.toolOutput)
+                            .map(p => {
+                              const portMatch = p.toolOutput!.match(/Port:\s*(\d+)/)
+                              const nameMatch = p.toolOutput!.match(/Process '([^']+)'/)
+                              if (!portMatch) return null
+                              const port = parseInt(portMatch[1])
+                              return { port, name: nameMatch?.[1] || 'app', alive: activePorts.has(port) }
+                            })
+                            .filter(Boolean) as { port: number; name: string; alive: boolean }[]
+                          if (apps.length === 0) return null
+                          return (
+                            <div className="mt-3 space-y-2">
+                              {apps.map(app => (
+                                <div
+                                  key={app.port}
+                                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                                    app.alive
+                                      ? 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                                      : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/20'
+                                  }`}
+                                  onClick={() => {
+                                    if (!app.alive) return
+                                    setPreviewUrl(`/api/preview/${app.port}`)
+                                    setPreviewTitle(app.name)
+                                  }}
+                                >
+                                  <div className={`relative w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                    app.alive ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-gray-100 dark:bg-gray-800/40'
+                                  }`}>
+                                    <Globe className={`w-4 h-4 ${app.alive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                                    {app.alive && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white dark:border-[#1a1a24]" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-sm font-medium truncate ${app.alive ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>{app.name}</span>
+                                      {app.alive && (
+                                        <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded">:{app.port}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {app.alive ? (
+                                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                                      点击前往
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </span>
+                                  ) : (
+                                    <button
+                                      className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 flex-shrink-0"
+                                      onClick={async (e) => {
+                                        e.stopPropagation()
+                                        const sid = selectedSessionId || currentSessionId
+                                        if (!sid) return
+                                        try {
+                                          await devApi.restartProcess(sid, app.name)
+                                          refreshActivePorts(sid)
+                                        } catch { /* ignore */ }
+                                      }}
+                                    >
+                                      <RotateCw className="w-3.5 h-3.5" />
+                                      重启
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })()}
 
                         {/* 审批卡片 */}
                         {msg.approvalRequest && (
@@ -1144,7 +1327,7 @@ export default function ChatPage() {
         <footer className="border-t border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#22222e]/80 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             {/* 附件和粘贴图片预览区 */}
-            {(selectedFiles.length > 0 || pastedImages.length > 0) && (
+            {(selectedFiles.length > 0 || pendingFiles.length > 0 || pastedImages.length > 0) && (
               <div className="flex flex-wrap items-center gap-2 mb-3 ml-11">
                 {selectedFiles.map(file => (
                   <AttachmentChip
@@ -1153,14 +1336,20 @@ export default function ChatPage() {
                     onRemove={() => setSelectedFiles(prev => prev.filter(f => f.path !== file.path))}
                   />
                 ))}
+                {pendingFiles.map(file => (
+                  <AttachmentChip
+                    key={`pending-${file.name}`}
+                    file={{ name: file.name, path: `uploads/${file.name}`, size: file.size, modified: '' }}
+                    onRemove={() => setPendingFiles(prev => {
+                      const next = prev.filter(f => f.name !== file.name)
+                      savePendingFiles(next)
+                      return next
+                    })}
+                  />
+                ))}
                 {pastedImages.map((img) => (
                   <div key={img.previewUrl} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 flex-shrink-0">
                     <img src={img.previewUrl} className="w-full h-full object-cover" alt="粘贴的图片" />
-                    {img.uploading && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      </div>
-                    )}
                     <button
                       onClick={() => removePastedImage(img.previewUrl)}
                       className="absolute top-0.5 right-0.5 p-0.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1174,11 +1363,27 @@ export default function ChatPage() {
 
             {/* 输入框和按钮 */}
             <div className="flex gap-2">
+              <input
+                type="file"
+                ref={fileUploadRef}
+                className="sr-only"
+                multiple
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || [])
+                  e.target.value = ''
+                  if (picked.length === 0) return
+                  setPendingFiles(prev => {
+                    const next = [...prev, ...picked.filter(f => !prev.some(p => p.name === f.name))]
+                    savePendingFiles(next)
+                    return next
+                  })
+                }}
+              />
               <button
-                onClick={() => setFileSelectorOpen(true)}
-                disabled={!selectedSessionId && !currentSessionId || isStreaming}
+                onClick={() => fileUploadRef.current?.click()}
+                disabled={isStreaming}
                 className="p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="附加文件"
+                title="上传文件"
               >
                 <Paperclip className="w-5 h-5" />
               </button>
@@ -1210,7 +1415,7 @@ export default function ChatPage() {
               </div>
               <button
                 onClick={handleSend}
-                disabled={(sendDisabled && pastedImages.filter(p => p.uploadedPath).length === 0) || isStreaming}
+                disabled={(sendDisabled && pastedImages.length === 0 && pendingFiles.length === 0) || isStreaming}
                 className="px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 <Send className="w-5 h-5" />
@@ -1219,35 +1424,6 @@ export default function ChatPage() {
           </div>
         </footer>
       </div>
-
-      {/* 右侧拖拽手柄 */}
-      <div className="relative flex-shrink-0" style={{ width: 0 }}>
-        <div
-          onMouseDown={handleResizeStart('right')}
-          className="absolute inset-y-0 -left-[4px] w-[8px] cursor-col-resize z-10 group"
-        >
-          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] opacity-0 group-hover:opacity-100 bg-primary-400/50 transition-opacity" />
-        </div>
-      </div>
-
-      {/* Right Sidebar - Workspace */}
-      <WorkspacePanel
-        sessionId={selectedSessionId ?? currentSessionId}
-        isStreaming={isStreaming}
-        onOpenPreview={(url, title) => { setPreviewUrl(url); setPreviewTitle(title) }}
-        style={{ width: workspaceWidth }}
-      />
-
-      {/* File Selector Modal */}
-      <FileSelector
-        sessionId={selectedSessionId ?? currentSessionId}
-        open={fileSelectorOpen}
-        onClose={() => setFileSelectorOpen(false)}
-        onSelect={(files) => {
-          setSelectedFiles(prev => [...prev, ...files.filter(f => !prev.some(p => p.path === f.path))])
-          setFileSelectorOpen(false)
-        }}
-      />
 
       {/* 图片 Lightbox */}
       {lightboxUrl && (

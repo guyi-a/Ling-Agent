@@ -1,6 +1,9 @@
 """
 会话管理路由（需要 JWT 认证）
 """
+import shutil
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -9,6 +12,7 @@ from app.database.session import get_db
 from app.crud.session import session_crud
 from app.schemas.session import SessionCreate, SessionUpdate, SessionResponse, SessionWithMessages
 from app.core.deps import get_current_user
+from app.core.config import settings
 from app.models.user import User
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -21,7 +25,10 @@ async def create_session(
     db: AsyncSession = Depends(get_db)
 ):
     """创建新会话（需要登录）"""
-    return await session_crud.create(db, session_in, current_user.user_id)
+    return await session_crud.create(
+        db, session_in, current_user.user_id,
+        project_id=session_in.project_id,
+    )
 
 
 @router.get("/", response_model=List[SessionResponse])
@@ -98,7 +105,19 @@ async def delete_session(
     if session.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此会话")
 
+    # 草稿会话（未物化项目）删除时清理工作区
+    workspace_to_remove = None
+    if hard_delete and session.project_id:
+        from app.crud.project import project_crud
+        project = await project_crud.get_by_id(db, session.project_id)
+        if project and not project.is_materialized:
+            wp = Path(settings.WORKSPACE_ROOT) / session_id
+            if wp.is_dir():
+                workspace_to_remove = wp
+
     success = await session_crud.hard_delete(db, session_id) if hard_delete else await session_crud.delete(db, session_id)
     if success:
+        if workspace_to_remove:
+            shutil.rmtree(workspace_to_remove, ignore_errors=True)
         return {"status": "success", "message": f"会话 {session_id} 已删除"}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除失败")

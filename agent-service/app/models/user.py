@@ -25,6 +25,7 @@ class User(Base):
 
     # 关系
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     account = relationship("Account", back_populates="user", uselist=False)
 
     def __repr__(self):

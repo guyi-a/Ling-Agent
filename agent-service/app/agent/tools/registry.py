@@ -30,6 +30,7 @@ from app.agent.tools.python_repl_tool import PythonReplTool
 from app.agent.tools.font_tool import InstallNotoSansSCTool
 from app.agent.tools.browser_tool import InstallBrowserUseTool, BrowserUseTool
 from app.agent.tools.dev_tool import DevRunTool, DevStopTool, DevRestartTool, DevLogsTool
+from app.agent.tools.project_tool import MaterializeProjectTool
 from app.agent.tools.health_tool import GetScaleQuestionsTool, GetHealthRecordsTool, GetAssessmentHistoryTool, SaveHealthRecordTool, SubmitAssessmentTool
 from app.agent.tools.chart_tool import GenerateHealthChartTool
 from app.agent.tools.memory_tool import SaveMemoryTool, DeleteMemoryTool
@@ -53,6 +54,7 @@ _dev_run_tool = DevRunTool()
 _dev_stop_tool = DevStopTool()
 _dev_restart_tool = DevRestartTool()
 _dev_logs_tool = DevLogsTool()
+_materialize_project_tool = MaterializeProjectTool()
 _get_scale_questions_tool = GetScaleQuestionsTool()
 _get_health_records_tool = GetHealthRecordsTool()
 _get_assessment_history_tool = GetAssessmentHistoryTool()
@@ -81,6 +83,7 @@ def set_session_id(session_id: str) -> None:
     _dev_stop_tool.current_session_id = session_id
     _dev_restart_tool.current_session_id = session_id
     _dev_logs_tool.current_session_id = session_id
+    _materialize_project_tool.current_session_id = session_id
 
 
 def set_user_id(user_id: str) -> None:
@@ -146,8 +149,9 @@ def get_general_tools() -> List[BaseTool]:
 
 
 def get_developer_tools() -> List[BaseTool]:
-    """开发者：文件 + shell + python + browser + dev + web_fetch + skill"""
+    """开发者：materialize + 文件 + shell + python + browser + dev + web_fetch + skill"""
     tools: List[BaseTool] = [
+        _materialize_project_tool,
         *_file_tools(),
         _shell_tool, _python_repl_tool,
         *_browser_tools(),

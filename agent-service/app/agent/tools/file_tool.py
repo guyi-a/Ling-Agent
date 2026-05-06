@@ -24,12 +24,43 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-def get_session_workspace(session_id: str) -> Path:
-    """获取当前 session 的工作区目录，不存在则创建"""
+def get_session_workspace(session_id: str, *, ensure: bool = True) -> Path:
+    """获取当前 session 的工作区目录。
+
+    优先使用项目 slug 目录（物化项目），否则回退到 session_id 目录。
+    ensure=True 时自动创建目录（工具写入时使用）。
+    """
+    from app.database.session import sync_session_factory
+    from app.models.session import Session
+    from app.models.project import Project
+    from sqlalchemy import select
+
+    try:
+        with sync_session_factory() as db:
+            result = db.execute(
+                select(Session).where(Session.session_id == session_id)
+            )
+            session = result.scalars().first()
+            if session and session.project_id:
+                proj_result = db.execute(
+                    select(Project).where(Project.id == session.project_id)
+                )
+                project = proj_result.scalars().first()
+                if project and project.slug:
+                    workspace = Path(settings.WORKSPACE_ROOT).resolve() / f"{project.id}_{project.slug}"
+                    if ensure:
+                        workspace.mkdir(parents=True, exist_ok=True)
+                        (workspace / "uploads").mkdir(exist_ok=True)
+                        (workspace / "outputs").mkdir(exist_ok=True)
+                    return workspace
+    except Exception:
+        pass
+
     workspace = Path(settings.WORKSPACE_ROOT).resolve() / session_id
-    workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "uploads").mkdir(exist_ok=True)
-    (workspace / "outputs").mkdir(exist_ok=True)
+    if ensure:
+        workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / "uploads").mkdir(exist_ok=True)
+        (workspace / "outputs").mkdir(exist_ok=True)
     return workspace
 
 
@@ -138,25 +169,7 @@ class ReadFileTool(BaseTool):
                 if rows:
                     tables.append(rows)
 
-            # 提取图片
-            images = []
-            out_dir = path.parent / f"{path.stem}_images"
-            out_dir.mkdir(exist_ok=True)
-
-            img_count = 0
-            for rel in doc.part.rels.values():
-                if "image" in rel.reltype:
-                    try:
-                        img_count += 1
-                        content_type = rel.target_part.content_type
-                        ext = content_type.split("/")[-1].replace("jpeg", "jpg")
-                        img_path = out_dir / f"image_{img_count:03d}.{ext}"
-                        img_path.write_bytes(rel.target_part.blob)
-                        images.append(str(img_path))
-                    except Exception as e:
-                        logger.warning(f"Failed to extract image: {e}")
-
-            logger.info(f"📄 Read Word: {len(text)} chars, {len(tables)} tables, {len(images)} images")
+            logger.info(f"📄 Read Word: {len(text)} chars, {len(tables)} tables")
 
             # 格式化返回结果
             output = f"📄 Document: {path.name}\n"
@@ -165,12 +178,6 @@ class ReadFileTool(BaseTool):
 
             if tables:
                 output += f"📋 Tables: {len(tables)}\n"
-
-            if images:
-                output += f"🖼️ Images: {len(images)}\n"
-                output += f"Image paths:\n"
-                for img in images:
-                    output += f"  - {img}\n"
 
             output += f"\n--- Content ---\n{text}"
             return output
@@ -189,50 +196,21 @@ class ReadFileTool(BaseTool):
 
             # 提取文本
             text_parts = []
-            images = []
-            out_dir = path.parent / f"{path.stem}_images"
-            out_dir.mkdir(exist_ok=True)
-
-            img_count = 0
             for page_num, page in enumerate(doc, 1):
-                # 提取文本
                 page_text = page.get_text()
                 if page_text.strip():
                     text_parts.append(f"--- Page {page_num} ---\n{page_text}")
 
-                # 提取图片
-                for img_idx, img in enumerate(page.get_images(), 1):
-                    try:
-                        xref = img[0]
-                        base_image = doc.extract_image(xref)
-                        img_bytes = base_image["image"]
-                        img_ext = base_image["ext"]
-
-                        img_count += 1
-                        img_path = out_dir / f"page{page_num}_img{img_idx}.{img_ext}"
-                        img_path.write_bytes(img_bytes)
-                        images.append(str(img_path))
-                    except Exception as e:
-                        logger.warning(f"Failed to extract image from page {page_num}: {e}")
-
             text = "\n\n".join(text_parts)
             page_count = doc.page_count
 
-            logger.info(f"📕 Read PDF: {page_count} pages, {len(text)} chars, {len(images)} images")
+            logger.info(f"📕 Read PDF: {page_count} pages, {len(text)} chars")
 
             doc.close()
 
-            # 格式化返回结果
             output = f"📄 Document: {path.name}\n"
             output += f"📊 Pages: {page_count}\n"
             output += f"📝 Text length: {len(text)} characters\n"
-
-            if images:
-                output += f"🖼️ Images: {len(images)}\n"
-                output += f"Image paths:\n"
-                for img in images:
-                    output += f"  - {img}\n"
-
             output += f"\n--- Content ---\n{text}"
             return output
 
@@ -250,52 +228,21 @@ class ReadFileTool(BaseTool):
 
             # 提取每页文本
             text_parts = []
-            images = []
-            out_dir = path.parent / f"{path.stem}_images"
-            out_dir.mkdir(exist_ok=True)
-
-            img_count = 0
             for slide_num, slide in enumerate(prs.slides, 1):
                 slide_texts = []
-
-                # 遍历所有形状
                 for shape in slide.shapes:
-                    # 提取文本
                     if hasattr(shape, "text") and shape.text.strip():
                         slide_texts.append(shape.text.strip())
-
-                    # 提取图片
-                    if shape.shape_type == 13:  # MSO_SHAPE_TYPE.PICTURE
-                        try:
-                            img_count += 1
-                            image = shape.image
-                            img_bytes = image.blob
-                            img_ext = image.ext
-
-                            img_path = out_dir / f"slide{slide_num}_img{img_count}.{img_ext}"
-                            img_path.write_bytes(img_bytes)
-                            images.append(str(img_path))
-                        except Exception as e:
-                            logger.warning(f"Failed to extract image from slide {slide_num}: {e}")
-
                 if slide_texts:
                     text_parts.append(f"--- Slide {slide_num} ---\n" + "\n".join(slide_texts))
 
             text = "\n\n".join(text_parts)
 
-            logger.info(f"📊 Read PPTX: {len(prs.slides)} slides, {len(text)} chars, {len(images)} images")
+            logger.info(f"📊 Read PPTX: {len(prs.slides)} slides, {len(text)} chars")
 
-            # 格式化返回结果
             output = f"📄 Document: {path.name}\n"
             output += f"📊 Slides: {len(prs.slides)}\n"
             output += f"📝 Text length: {len(text)} characters\n"
-
-            if images:
-                output += f"🖼️ Images: {len(images)}\n"
-                output += f"Image paths:\n"
-                for img in images:
-                    output += f"  - {img}\n"
-
             output += f"\n--- Content ---\n{text}"
             return output
 

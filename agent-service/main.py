@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from app.models import *
 
 # 导入路由
-from app.routers import auth_router, user_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router, health_router
+from app.routers import auth_router, user_router, project_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router, health_router
 
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
@@ -150,6 +150,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(project_router)
 app.include_router(session_router)
 app.include_router(message_router)
 app.include_router(chat_router)

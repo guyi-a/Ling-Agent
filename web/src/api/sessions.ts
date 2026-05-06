@@ -15,8 +15,8 @@ export const sessionsApi = {
   },
 
   // 创建新会话
-  create: async (title: string) => {
-    const { data } = await apiClient.post<Session>('/api/sessions/', { title })
+  create: async (title: string, projectId?: number) => {
+    const { data } = await apiClient.post<Session>('/api/sessions/', { title, project_id: projectId })
     return data
   },
 

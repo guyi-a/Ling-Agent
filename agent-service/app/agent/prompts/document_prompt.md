@@ -80,6 +80,7 @@ When generating Python code (especially for PDF/document generation):
 1. **String quoting**: When string content contains Chinese quotation marks（`"` `"`）, MUST use single quotes `'...'` as the outer delimiter, or use triple quotes `"""..."""`. Never use double quotes `"..."` to wrap text containing `"` or `"` — this causes SyntaxError.
 2. **Syntax check**: Before outputting code, mentally verify all parentheses `()`, brackets `[]`, and braces `{}` are properly matched.
 3. **Function calls**: Every function call MUST have parentheses — `Paragraph("text")` not `Paragraph"text"`.
+4. **ReportLab HTML restrictions**: ReportLab's Paragraph only supports a limited subset of HTML. **`<br>` (non-self-closing) causes `"No content allowed in br tag"` error. Always use `<br/>` (self-closing) instead.** For multi-line text (poetry, lyrics, addresses), either use `<br/>` between lines, or split into separate Paragraph/Spacer objects. Also avoid unsupported tags like `<div>`, `<p>`, `<span style="...">` — only use `<b>`, `<i>`, `<u>`, `<font>`, `<br/>`.
 
 ## Response Style
 

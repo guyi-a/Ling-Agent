@@ -182,7 +182,7 @@ class GenerateHealthChartTool(BaseTool):
         )
 
         rel_path = self._save_html(fig, "emotion_trend")
-        return f"情绪趋势图已生成: {rel_path}"
+        return f"情绪趋势图已生成，点击上方工具卡片的预览按钮即可查看: {rel_path}"
 
     # ── 测评分数趋势图 ──
 
@@ -241,7 +241,7 @@ class GenerateHealthChartTool(BaseTool):
         )
 
         rel_path = self._save_html(fig, "assessment_trend")
-        return f"测评分数趋势图已生成: {rel_path}"
+        return f"测评分数趋势图已生成，点击上方工具卡片的预览按钮即可查看: {rel_path}"
 
     # ── 身体不适程度趋势折线图 ──
 
@@ -296,4 +296,4 @@ class GenerateHealthChartTool(BaseTool):
         )
 
         rel_path = self._save_html(fig, "body_trend")
-        return f"身体不适趋势图已生成: {rel_path}"
+        return f"身体不适趋势图已生成，点击上方工具卡片的预览按钮即可查看: {rel_path}"

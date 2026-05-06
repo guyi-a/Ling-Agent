@@ -13,6 +13,7 @@ class SessionCreate(BaseModel):
     """创建会话请求"""
     user_id: Optional[str] = Field(None, description="用户ID")
     title: Optional[str] = Field(None, description="会话标题")
+    project_id: Optional[int] = Field(None, description="所属项目ID（不传则自动创建 adhoc 项目）")
 
 
 class SessionUpdate(BaseModel):

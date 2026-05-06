@@ -102,19 +102,14 @@ async def list_all(
     db: AsyncSession = Depends(get_db),
 ):
     """列出当前用户所有会话的后台进程"""
-    # 获取用户所有会话
     sessions = await session_crud.get_by_user(db, current_user.user_id)
-    session_map = {s.session_id: s.title or s.session_id[:8] for s in sessions}
-    user_session_ids = set(session_map.keys())
-
-    # 获取所有进程，过滤出属于该用户的
-    all_procs = pm_list_all()
     result = []
-    for proc in all_procs:
-        sid = proc["session_id"]
-        if sid in user_session_ids:
-            proc["session_title"] = session_map[sid]
-            result.append(proc)
+    for s in sessions:
+        procs = pm_list(s.session_id)
+        for p in procs:
+            p["session_id"] = s.session_id
+            p["session_title"] = s.title or s.session_id[:8]
+            result.append(p)
 
     return {"processes": result}
 
