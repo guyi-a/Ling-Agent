@@ -10,18 +10,8 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import EmojiPicker from '@/components/EmojiPicker'
 import { sessionsApi } from '@/api/sessions'
 import { devApi } from '@/api/dev'
+import { formatRelativeTime, formatDate } from '@/utils/time'
 import type { ProjectDetail, SessionBrief, DevApp } from '@/types'
-
-function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins} 分钟前`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} 小时前`
-  const days = Math.floor(hours / 24)
-  return `${days} 天前`
-}
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -294,7 +284,7 @@ export default function ProjectDetailPage() {
           <div>
             <div className="text-[11px] text-gray-400 dark:text-gray-500 mb-0.5">创建于</div>
             <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              {new Date(project.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+              {formatDate(project.created_at)}
             </div>
           </div>
           <div className="flex-1" />

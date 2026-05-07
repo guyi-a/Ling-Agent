@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search, X, MessageSquare, User, Bot, Loader2 } from 'lucide-react'
 import { messagesApi, type SearchResult } from '@/api/messages'
+import { parseBackendTime } from '@/utils/time'
 
 interface GlobalSearchModalProps {
   open: boolean
@@ -24,7 +25,7 @@ function highlightMatch(text: string, keyword: string): React.ReactNode {
 }
 
 function formatTime(dateStr: string): string {
-  const d = new Date(dateStr)
+  const d = parseBackendTime(dateStr)
   const now = new Date()
   const diffMs = now.getTime() - d.getTime()
 

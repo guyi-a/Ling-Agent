@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { sessionsApi } from '@/api/sessions'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { formatRelativeTime, getTimeGroup as _getTimeGroup } from '@/utils/time'
 import type { Session } from '@/types'
 
 // ─── 时间分组工具 ───
@@ -20,19 +21,7 @@ function parseUTC(dateStr: string): Date {
 }
 
 function getTimeGroup(dateStr: string): TimeGroup {
-  const now = new Date()
-  const date = parseUTC(dateStr)
-
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000)
-  const startOf7Days = new Date(startOfToday.getTime() - 6 * 86400000)
-  const startOf30Days = new Date(startOfToday.getTime() - 29 * 86400000)
-
-  if (date >= startOfToday) return '今天'
-  if (date >= startOfYesterday) return '昨天'
-  if (date >= startOf7Days) return '最近 7 天'
-  if (date >= startOf30Days) return '最近 30 天'
-  return '更早'
+  return _getTimeGroup(dateStr) as TimeGroup
 }
 
 function groupSessions(sessions: Session[]): Map<TimeGroup, Session[]> {
@@ -43,22 +32,6 @@ function groupSessions(sessions: Session[]): Map<TimeGroup, Session[]> {
     groups.get(g)!.push(s)
   }
   return groups
-}
-
-function formatTime(dateStr: string): string {
-  const d = parseUTC(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-
-  if (diffMs < 60000) return '刚刚'
-  if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)} 分钟前`
-  if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)} 小时前`
-
-  const sameYear = d.getFullYear() === now.getFullYear()
-  if (sameYear) {
-    return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
-  }
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 // ─── 骨架屏 ───
@@ -323,7 +296,7 @@ export default function SessionsPage() {
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs text-gray-400 dark:text-gray-500">
-                              {formatTime(session.updated_at)}
+                              {formatRelativeTime(session.updated_at)}
                             </span>
                             {session.message_count != null && session.message_count > 0 && (
                               <span className="text-xs text-gray-400 dark:text-gray-500">

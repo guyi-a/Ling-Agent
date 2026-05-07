@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, Clock, AlertTriangle
 import { healthApi, type ScaleSummary, type ScaleData, type Assessment } from '@/api/health'
 import Logo from '@/components/Logo'
 import { useThemeStore } from '@/stores/themeStore'
+import { formatDate } from '@/utils/time'
 
 const SEVERITY_COLORS: Record<string, string> = {
   '正常': 'text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/40',
@@ -273,7 +274,7 @@ export default function AssessmentPage() {
                                       {(() => { try { const d = JSON.parse(latest.result_detail || '{}'); return `${d.title || latest.severity} ${d.similarity != null ? d.similarity + '%' : ''}`; } catch { return latest.severity; } })()}
                                     </span>
                                   )}
-                                  <span className="text-gray-300 dark:text-gray-600">{new Date(latest.created_at.endsWith('Z') || latest.created_at.includes('+') ? latest.created_at : latest.created_at + 'Z').toLocaleDateString('zh-CN')}</span>
+                                  <span className="text-gray-300 dark:text-gray-600">{formatDate(latest.created_at)}</span>
                                 </div>
                               )}
                               <div className="flex items-center justify-between">

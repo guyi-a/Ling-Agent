@@ -5,6 +5,7 @@ import { healthApi, type HealthRecord, type HealthRecordCreate } from '@/api/hea
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Logo from '@/components/Logo'
 import { useThemeStore } from '@/stores/themeStore'
+import { parseBackendTime } from '@/utils/time'
 
 const BODY_PARTS: { label: string; icon: LucideIcon; bg: string; fg: string }[] = [
   { label: '头',   icon: Headphones, bg: 'bg-sky-100 dark:bg-sky-900/40',      fg: 'text-sky-600 dark:text-sky-400' },
@@ -49,13 +50,8 @@ function EmotionIcon({ emotion, size = 'sm' }: { emotion: string; size?: 'sm' | 
   )
 }
 
-function parseUTC(dateStr: string): Date {
-  const s = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
-  return new Date(s)
-}
-
 function formatTime(dateStr: string) {
-  const d = parseUTC(dateStr)
+  const d = parseBackendTime(dateStr)
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 

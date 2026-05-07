@@ -11,6 +11,7 @@ import Logo from '@/components/Logo'
 import { useThemeStore } from '@/stores/themeStore'
 import { sessionsApi } from '@/api/sessions'
 import apiClient from '@/api/client'
+import { parseBackendTime } from '@/utils/time'
 
 const GRADIENT_MESH: Record<string, { light: string; dark: string }> = {
   violet: {
@@ -109,7 +110,7 @@ export default function ProfilePage() {
     }).catch(() => {})
     apiClient.get('/api/auth/me').then((res) => {
       const raw = res.data.created_at as string
-      const date = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z')
+      const date = parseBackendTime(raw)
       setJoinedAt(date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }))
       setDaysSince(Math.floor((Date.now() - date.getTime()) / 86400000))
     }).catch(() => {})

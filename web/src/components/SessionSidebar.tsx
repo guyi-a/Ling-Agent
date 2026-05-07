@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useProjectsStore } from '@/stores/projectsStore'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import UserProfileMenu from '@/components/UserProfileMenu'
+import { parseBackendTime } from '@/utils/time'
 import type { Session, Project, AdhocSession } from '@/types'
 
 type SortMode = 'recent' | 'name' | 'created'
@@ -26,7 +27,7 @@ const GROUP_ORDER: TimeGroup[] = ['置顶', '今天', '昨天', '最近 7 天', 
 
 function getTimeGroup(dateStr: string): TimeGroup {
   const now = new Date()
-  const date = new Date(dateStr)
+  const date = parseBackendTime(dateStr)
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const startOfYesterday = new Date(startOfToday.getTime() - 86400000)
   const startOf7Days = new Date(startOfToday.getTime() - 6 * 86400000)
@@ -85,8 +86,8 @@ export default function SessionSidebar({ currentSessionId, onSelectSession, onSe
 
   const sortedProjects = [...projects].sort((a, b) => {
     if (sortMode === 'name') return (a.title || '').localeCompare(b.title || '', 'zh')
-    if (sortMode === 'created') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    return new Date(b.last_active_at || b.created_at).getTime() - new Date(a.last_active_at || a.created_at).getTime()
+    if (sortMode === 'created') return parseBackendTime(b.created_at).getTime() - parseBackendTime(a.created_at).getTime()
+    return parseBackendTime(b.last_active_at || b.created_at).getTime() - parseBackendTime(a.last_active_at || a.created_at).getTime()
   })
 
   // --- 操作 ---
@@ -412,7 +413,7 @@ function ProjectItem({ project, isExpanded, currentSessionId, onToggle, onSelect
   }, [loaded, project.id])
 
   const formatRelativeTime = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime()
+    const diff = Date.now() - parseBackendTime(dateStr).getTime()
     const mins = Math.floor(diff / 60000)
     if (mins < 60) return `${mins} 分钟`
     const hours = Math.floor(mins / 60)
