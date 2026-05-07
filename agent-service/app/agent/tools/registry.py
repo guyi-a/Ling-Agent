@@ -23,6 +23,7 @@ from typing import List
 from langchain.tools import BaseTool
 
 from app.agent.tools.file_tool import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
+from app.agent.tools.chunked_write_tool import ChunkedWriteTool
 from app.agent.tools.web_tool import WebFetchTool, WebSearchTool
 from app.agent.tools.skill_tool import create_skill_tool
 from app.agent.tools.shell_tool import ShellTool
@@ -46,6 +47,7 @@ _read_file_tool = ReadFileTool()
 _write_file_tool = WriteFileTool()
 _edit_file_tool = EditFileTool()
 _list_dir_tool = ListDirTool()
+_chunked_write_tool = ChunkedWriteTool()
 _shell_tool = ShellTool()
 _python_repl_tool = PythonReplTool()
 _install_browser_use_tool = InstallBrowserUseTool()
@@ -75,6 +77,7 @@ def set_session_id(session_id: str) -> None:
     _write_file_tool.current_session_id = session_id
     _edit_file_tool.current_session_id = session_id
     _list_dir_tool.current_session_id = session_id
+    _chunked_write_tool.current_session_id = session_id
     _shell_tool.current_session_id = session_id
     _python_repl_tool.current_session_id = session_id
     _generate_health_chart_tool.current_session_id = session_id
@@ -100,7 +103,7 @@ def set_user_id(user_id: str) -> None:
 # ── 工具组合（共享单例引用） ──────────────────────────────
 
 def _file_tools() -> List[BaseTool]:
-    return [_read_file_tool, _write_file_tool, _edit_file_tool, _list_dir_tool]
+    return [_read_file_tool, _write_file_tool, _edit_file_tool, _list_dir_tool, _chunked_write_tool]
 
 
 def _health_tools() -> List[BaseTool]:

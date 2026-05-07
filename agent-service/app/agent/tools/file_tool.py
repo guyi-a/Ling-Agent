@@ -186,7 +186,7 @@ class ReadFileTool(BaseTool):
             return f"Error reading Word document: {e}"
 
     def _read_pdf(self, path: Path) -> str:
-        """读取 PDF 文档"""
+        """读取 PDF 文档（支持 OCR fallback）"""
         try:
             import fitz  # PyMuPDF
 
@@ -194,21 +194,35 @@ class ReadFileTool(BaseTool):
 
             # 提取文本
             text_parts = []
+            ocr_pages = []
             for page_num, page in enumerate(doc, 1):
-                page_text = page.get_text()
-                if page_text.strip():
+                page_text = page.get_text().strip()
+
+                # 如果文本提取成功且内容足够（>20 字符），直接使用
+                if page_text and len(page_text) > 20:
                     text_parts.append(f"--- Page {page_num} ---\n{page_text}")
+                else:
+                    # 尝试 OCR
+                    ocr_text = self._try_ocr_page(page)
+                    if ocr_text:
+                        text_parts.append(f"--- Page {page_num} (OCR) ---\n{ocr_text}")
+                        ocr_pages.append(page_num)
+                    elif page_text:
+                        # 有少量文本但不足 20 字符，仍然保留
+                        text_parts.append(f"--- Page {page_num} ---\n{page_text}")
 
             text = "\n\n".join(text_parts)
             page_count = doc.page_count
 
-            logger.info(f"📕 Read PDF: {page_count} pages, {len(text)} chars")
+            logger.info(f"📕 Read PDF: {page_count} pages, {len(text)} chars, OCR used on {len(ocr_pages)} pages")
 
             doc.close()
 
             output = f"📄 Document: {path.name}\n"
             output += f"📊 Pages: {page_count}\n"
             output += f"📝 Text length: {len(text)} characters\n"
+            if ocr_pages:
+                output += f"🔍 OCR used on pages: {', '.join(map(str, ocr_pages))}\n"
             output += f"\n--- Content ---\n{text}"
             return output
 
@@ -216,6 +230,44 @@ class ReadFileTool(BaseTool):
             return "Error: PyMuPDF library not installed. Run: pip install PyMuPDF"
         except Exception as e:
             return f"Error reading PDF document: {e}"
+
+    def _try_ocr_page(self, page) -> str:
+        """对单页 PDF 执行 OCR（使用 RapidOCR）"""
+        try:
+            import cv2
+            import numpy as np
+            from rapidocr_onnxruntime import RapidOCR
+            import fitz
+
+            # 将页面转为图像（2倍分辨率提高 OCR 准确度）
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+
+            # 转换为 numpy array
+            channels = 4 if pix.alpha else 3
+            image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, channels)
+            if channels == 4:
+                image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
+            # 执行 OCR
+            engine = RapidOCR()
+            result, _ = engine(image)
+
+            # 提取文本行
+            lines = []
+            for item in result or []:
+                if len(item) >= 2:
+                    text = str(item[1]).strip()
+                    if text:
+                        lines.append(text)
+
+            return '\n'.join(lines) if lines else ""
+
+        except ImportError:
+            logger.warning("OCR dependencies not available (need opencv-python, rapidocr-onnxruntime)")
+            return ""
+        except Exception as e:
+            logger.warning(f"OCR failed: {e}")
+            return ""
 
     def _read_pptx(self, path: Path) -> str:
         """读取 PowerPoint 文档"""

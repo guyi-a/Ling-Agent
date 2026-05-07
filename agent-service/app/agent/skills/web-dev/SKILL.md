@@ -54,6 +54,7 @@ All files go directly in the **project workspace root** (NOT in `outputs/`):
 | Action | Tool | Notes |
 |--------|------|-------|
 | Create new files | `write_file` | Path: `main.py`, `index.html`, etc. (relative to workspace root) |
+| Create large files | `write_file_chunked` | For files >200 lines: start → append chunks → finish |
 | Edit existing files | `edit_file` | **Prefer over write_file for small changes** — saves tokens |
 | Read files | `read_file` | Check existing content before editing |
 | List directory | `list_dir` | Verify project structure |
@@ -292,6 +293,36 @@ curl -s -X DELETE http://127.0.0.1:{port}/api/todos/1
 5. Do NOT proceed to frontend until ALL endpoints return expected results
 
 ## Frontend Guide
+
+### Writing Large HTML Files
+
+**For files >200 lines, use chunked writing to avoid token limits:**
+
+```
+1. write_file_chunked(mode="start", path="index.html")
+   → returns session_id
+
+2. write_file_chunked(mode="append", session_id="...", content="<first 50 lines>")
+   → append DOCTYPE, <head>, CDN imports, opening <body>
+
+3. write_file_chunked(mode="append", session_id="...", content="<next chunk>")
+   → append main content sections
+
+4. write_file_chunked(mode="append", session_id="...", content="<final chunk>")
+   → append <script> block and closing tags
+
+5. write_file_chunked(mode="finish", session_id="...")
+   → file saved
+```
+
+**Rules:**
+- Start with structure (DOCTYPE, head, CDN imports)
+- Append content in logical sections (navbar, main, footer)
+- End with Alpine.js script and closing tags
+- Each chunk should be ~50 lines
+- Do NOT reply to user between chunks — write all chunks in one turn
+
+**For files <200 lines, use regular `write_file`.**
 
 ### Tech Stack
 

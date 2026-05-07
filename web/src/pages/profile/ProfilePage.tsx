@@ -160,11 +160,10 @@ export default function ProfilePage() {
 
       {/* 顶栏 — 半透明浮动 */}
       <div className="fixed top-0 left-0 right-0 z-20 border-b border-gray-200/50 dark:border-gray-800/50 bg-white/60 dark:bg-[#22222e]/60 backdrop-blur-xl">
-        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center gap-3">
+        <div className="w-full px-6 h-14 flex items-center justify-between">
           <button onClick={() => navigate('/chat')} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex-1" />
           <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors">
             {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
           </button>

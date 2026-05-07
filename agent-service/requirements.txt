@@ -66,3 +66,4 @@ mcp>=1.0.0                     # MCP Python SDK
 
 # OCR (image text extraction)
 rapidocr-onnxruntime>=1.4.0
+opencv-python>=4.8.0       # Image processing for OCR

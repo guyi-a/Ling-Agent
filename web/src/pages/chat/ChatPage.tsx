@@ -1050,9 +1050,9 @@ export default function ChatPage() {
                               const toggled = collapsedTools.has(toolKey)
                               const isExpanded = defaultCollapsed ? toggled : !toggled
                               const canExpand = part.toolStatus === 'done' && (part.toolInput || part.toolOutput)
-                              const chartHtmlMatch = part.toolName === 'generate_health_chart' && part.toolStatus === 'done' && part.toolOutput?.match(/:\s*(outputs\/charts\/\S+\.html)/i)
+                              const chartHtmlMatch = part.toolName === 'generate_health_chart' && part.toolStatus === 'done' && part.toolOutput?.match(/:\s*((?:outputs\/)?charts\/\S+\.html)/i)
                               const _outputSource = part.toolName === 'python_repl' ? `${part.toolOutput || ''}\n${part.toolInput?.code || ''}` : (part.toolOutput || '')
-                              const outputFileMatch = part.toolStatus === 'done' && /^(python_repl|run_command)$/.test(part.toolName || '') && _outputSource.match(/(outputs\/[^\s,，。"'()]+\.(?:pdf|html?))/i)
+                              const outputFileMatch = part.toolStatus === 'done' && /^(python_repl|run_command)$/.test(part.toolName || '') && _outputSource.match(/([^\s,，。"'()]+\.(?:pdf|html?))/i)
                               const previewFilePath = part.toolInput?.path || chartHtmlMatch?.[1] || outputFileMatch?.[1]
                               const hasPreview = (part.toolName === 'write_file' && part.toolStatus === 'done' && /\.(?:html?|pdf)$/i.test(part.toolInput?.path || ''))
                                 || !!chartHtmlMatch
