@@ -8,6 +8,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 
 from app.agent.service.process_manager import is_port_active
 from app.routers._proxy import proxy_to_local
@@ -34,6 +35,6 @@ async def proxy_to_dev_server(port: int, path: str, request: Request):
 
 @router.api_route("/{port}", methods=["GET"])
 async def proxy_root(port: int, request: Request):
-    """代理根路径（无尾斜杠）"""
+    """重定向到带尾斜杠的路径，确保相对 URL 正确解析"""
     _verify_port(port)
-    return await proxy_to_local(port, "", request)
+    return RedirectResponse(url=f"/api/preview/{port}/", status_code=302)

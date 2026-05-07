@@ -19,14 +19,15 @@ def get_embeddings() -> Optional[OpenAIEmbeddings]:
     if _embeddings is not None:
         return _embeddings
 
-    if not settings.RAG_API_KEY:
-        logger.warning("RAG_API_KEY 未配置，Embedding 不可用")
+    api_key = settings.QWEN_API_KEY
+    if not api_key:
+        logger.warning("QWEN_API_KEY 未配置，Embedding 不可用")
         return None
 
     _embeddings = OpenAIEmbeddings(
         model=settings.RAG_EMBEDDING_MODEL,
-        base_url=settings.RAG_BASE_URL,
-        api_key=settings.RAG_API_KEY,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        api_key=api_key,
         check_embedding_ctx_length=False,
     )
     logger.info(f"✓ Embedding 实例已创建 - model: {settings.RAG_EMBEDDING_MODEL}")

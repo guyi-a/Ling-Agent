@@ -51,12 +51,6 @@ def _validate_attachments(attachments: List[Dict[str, Any]]) -> bool:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid attachment path: path traversal detected"
             )
-        allowed_prefixes = ["uploads/", "outputs/"]
-        if not any(att_path.startswith(prefix) for prefix in allowed_prefixes):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Attachment path must start with 'uploads/' or 'outputs/': {att_path}"
-            )
 
     return True
 

@@ -79,7 +79,7 @@ class PythonReplTool(BaseTool):
         "Execute a Python code snippet and return its output. "
         "The working directory is the session workspace, so you can read/write files there. "
         "Use this for data analysis, calculations, file processing, generating charts, etc. "
-        "The script will be saved to outputs/scripts/ for future reference. "
+        "The script will be saved to scripts/ for future reference. "
         "Supports 3 modes: "
         "(1) New script: just pass `code` — auto-generates a timestamped file. "
         "(2) Rewrite script: pass `code` + `filename` — overwrites the named file and executes. "
@@ -120,7 +120,7 @@ class PythonReplTool(BaseTool):
             cwd.mkdir(parents=True, exist_ok=True)
 
         # 创建 scripts 目录用于保存执行的脚本
-        scripts_dir = cwd / "outputs" / "scripts"
+        scripts_dir = cwd / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         # 确定脚本文件路径

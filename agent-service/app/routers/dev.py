@@ -101,10 +101,16 @@ async def list_all(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出当前用户所有会话的后台进程"""
+    """列出当前用户所有会话的后台进程（按 workspace 去重）"""
     sessions = await session_crud.get_by_user(db, current_user.user_id)
     result = []
+    seen_workspaces: set[str] = set()
     for s in sessions:
+        from app.agent.tools.file_tool import get_session_workspace
+        workspace = str(get_session_workspace(s.session_id, ensure=False))
+        if workspace in seen_workspaces:
+            continue
+        seen_workspaces.add(workspace)
         procs = pm_list(s.session_id)
         for p in procs:
             p["session_id"] = s.session_id

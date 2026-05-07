@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "deepseek": {
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "models": ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash", "deepseek-v4-pro"]
+    },
+    "qwen": {
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key_env": "QWEN_API_KEY",
+      "models": ["qwen-plus", "qwen-max", "qwen3-235b-a22b", "qwen-turbo"]
+    },
+    "zhipu": {
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "api_key_env": "ZHIPU_API_KEY",
+      "models": ["glm-4-flash", "glm-4-air", "glm-4.7", "glm-5.1", "glm-4-plus"]
+    }
+  },
+  "default_provider": "zhipu"
+}

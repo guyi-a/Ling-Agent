@@ -29,10 +29,10 @@ A **Page** is a web page displayed in an iframe inside the chat window. The user
 
 ## Project Structure
 
-All files go under `outputs/projects/{app-name}/`:
+All files go directly in the **project workspace root** (NOT in `outputs/`):
 
 ```
-outputs/projects/{app-name}/
+{workspace}/
 ├── PLAN.md             # Project plan (REQUIRED — create FIRST)
 ├── main.py             # FastAPI entry: CORS, health, mount routes & static
 ├── routes.py           # API route handlers (all business logic here)
@@ -40,7 +40,8 @@ outputs/projects/{app-name}/
 ├── index.html          # Frontend entry (Tailwind + DaisyUI + Alpine.js via CDN)
 ├── *.html              # Additional pages if needed (admin.html, stats.html, etc.)
 ├── static/             # Shared CSS/JS/images (optional — only when multiple pages share code)
-└── data/               # Runtime data (SQLite, etc.)
+├── data/               # Runtime data (SQLite, etc.)
+└── uploads/            # User-uploaded files (read-only)
 ```
 
 **File strategy:**
@@ -52,7 +53,7 @@ outputs/projects/{app-name}/
 
 | Action | Tool | Notes |
 |--------|------|-------|
-| Create new files | `write_file` | Path: `outputs/projects/{name}/filename` |
+| Create new files | `write_file` | Path: `main.py`, `index.html`, etc. (relative to workspace root) |
 | Edit existing files | `edit_file` | **Prefer over write_file for small changes** — saves tokens |
 | Read files | `read_file` | Check existing content before editing |
 | List directory | `list_dir` | Verify project structure |
@@ -65,7 +66,7 @@ outputs/projects/{app-name}/
 
 ## Development Workflow
 
-1. **Write PLAN.md FIRST** — create `outputs/projects/{app-name}/PLAN.md` containing:
+1. **Write PLAN.md FIRST** — create `PLAN.md` containing:
    - Data model (tables, fields)
    - API endpoints list (method, path, request/response format)
    - Frontend pages and components
@@ -73,7 +74,20 @@ outputs/projects/{app-name}/
    This ensures frontend and backend paths stay in sync. **Do NOT write any code before PLAN.md is done.**
 2. **Build backend** — write `main.py` + `routes.py` + `requirements.txt` → **MUST create venv and install deps BEFORE dev_run** (see "Virtual Environment" section below) → `dev_run` with `.venv\Scripts\python` (Windows) or `.venv/bin/python` (macOS/Linux), NEVER bare `python` → verify with `dev_logs`. **Do NOT write any frontend files before backend is created and working.**
 3. **Curl-test ALL API endpoints** — this step is **MANDATORY**, do NOT skip it. After the server starts successfully, use `run_command` to curl every endpoint in PLAN.md. See the "API Self-Testing" section below for details.
-4. **Build frontend** — write `index.html` (+ CSS/JS). Follow PLAN.md to ensure `fetch()` calls match API routes exactly.
+4. **Build frontend** — write `index.html` (+ CSS/JS). You MUST follow ALL rules in the checklist below while writing. Do NOT write the file first and check later — get it right the first time.
+   
+   **Frontend coding checklist (enforce while writing):**
+   - [ ] CDN order: DaisyUI CSS `<link>` → Tailwind `<script>` → Alpine.js `<script defer>`
+   - [ ] All `fetch()` paths are relative, NO leading `/` — `fetch("api/todos")` not `fetch("/api/todos")`
+   - [ ] All `fetch()` POST/PUT include `headers: {"Content-Type": "application/json"}` and `body: JSON.stringify(data)`
+   - [ ] All `fetch()` calls check `if (!res.ok)` before using response data
+   - [ ] Alpine.js: use `function app() { return {...} }` (not arrow function), with BOTH `x-data="app()"` and `x-init="init()"`
+   - [ ] Every `x-for` has `:key` — `<template x-for="item in items" :key="item.id">`
+   - [ ] `x-show` / `x-transition` for loading states and conditional UI
+   - [ ] Responsive layout: use `max-w-4xl mx-auto p-6`, test with `flex-col md:flex-row` for wide/narrow
+   - [ ] All user-facing text in Chinese, `<html lang="zh-CN">`
+   - [ ] No inline event handlers (`onclick="..."`) — use Alpine `@click`
+   - [ ] Error/empty states handled: show placeholder when list is empty, show error alert on fetch failure
 5. **Start preview** — tell the user: "点击项目卡片上的预览按钮（眼睛图标）查看效果"
 6. **Show the user** — pause and wait for feedback. Do not continue until the user responds.
 7. **Iterate** — apply feedback → edit files → `dev_restart` → re-test affected endpoints with curl → tell user to refresh preview.
@@ -197,7 +211,7 @@ def delete_todo(todo_id: int):
 **Do NOT hardcode a port in the command.** Pass port via the `port` parameter — ProcessManager auto-allocates a free port from the configured range.
 
 ```
-dev_run(name="{app-name}-server", command="python -m uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
+dev_run(name="{app-name}-server", command="python -m uvicorn main:app --host 127.0.0.1")
 ```
 
 Then immediately verify:
@@ -211,24 +225,24 @@ If logs show errors, fix the code and `dev_restart`.
 
 **Windows:**
 ```
-run_command("cd outputs/projects/{app-name} && python -m venv .venv && .venv\\Scripts\\python -m pip install -r requirements.txt")
+run_command("python -m venv .venv && .venv\\Scripts\\python -m pip install -r requirements.txt")
 ```
 
 **macOS / Linux:**
 ```
-run_command("cd outputs/projects/{app-name} && python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt")
+run_command("python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt")
 ```
 
 Then start with venv Python:
 
 **Windows:**
 ```
-dev_run(name="{app-name}-server", command=".venv\\Scripts\\python -m uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
+dev_run(name="{app-name}-server", command=".venv\\Scripts\\python -m uvicorn main:app --host 127.0.0.1")
 ```
 
 **macOS / Linux:**
 ```
-dev_run(name="{app-name}-server", command=".venv/bin/python -m uvicorn main:app --host 127.0.0.1", workdir="outputs/projects/{app-name}")
+dev_run(name="{app-name}-server", command=".venv/bin/python -m uvicorn main:app --host 127.0.0.1")
 ```
 
 ## API Self-Testing (MANDATORY)
@@ -490,15 +504,48 @@ Semantic colors: `bg-base-100/200/300`, `text-base-content`, `text-primary/secon
         <span class="text-xl font-bold px-4">{App Name}</span>
     </div>
     <div x-data="app()" x-init="init()" class="max-w-4xl mx-auto p-6">
-        <!-- content -->
+        <div x-show="loading" class="flex justify-center py-12">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+        <div x-show="error" class="alert alert-error mb-4">
+            <span x-text="error"></span>
+        </div>
+        <div x-show="!loading && items.length === 0" class="text-center py-12 text-base-content/50">
+            暂无数据
+        </div>
+        <template x-for="item in items" :key="item.id">
+            <div class="card bg-base-100 shadow-sm mb-2">
+                <div class="card-body p-4">
+                    <span x-text="item.name"></span>
+                </div>
+            </div>
+        </template>
     </div>
     <script>
     function app() {
         return {
             items: [],
+            loading: true,
+            error: '',
             async init() {
-                const res = await fetch("api/items");
-                this.items = await res.json();
+                try {
+                    const res = await fetch("api/items");
+                    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+                    this.items = await res.json();
+                } catch (e) {
+                    this.error = '加载失败：' + e.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async createItem(data) {
+                const res = await fetch("api/items", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(data),
+                });
+                if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+                return await res.json();
             },
         }
     }
@@ -525,7 +572,7 @@ Semantic colors: `bg-base-100/200/300`, `text-base-content`, `text-primary/secon
 
 - Bind servers to `127.0.0.1`, never `0.0.0.0`
 - CORS must be enabled on all Services — iframe requests are cross-origin
-- All files must be written under `outputs/projects/{app-name}/`
+- All files are written directly in the workspace root — NOT in `outputs/`
 - Do not hardcode ports — let ProcessManager detect from command args
 - Do not use `sleep` loops for periodic tasks
 - **CRITICAL**: `run_command` is for one-off commands (pip install, curl) ONLY. NEVER use `run_command` to start servers — it blocks and times out. ALWAYS use `dev_run` to start servers. Max 120s timeout.

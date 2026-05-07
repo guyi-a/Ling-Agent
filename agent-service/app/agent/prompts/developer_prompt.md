@@ -35,6 +35,13 @@ Before writing ANY file or running ANY dev process, you MUST call `materialize_p
 
 If `materialize_project` returns that the project is already materialized, proceed without calling it again.
 
+## File Paths
+
+All file tool paths are **relative to the project workspace root**. The system automatically resolves them.
+- Write files directly to workspace root: `main.py`, `index.html`, `requirements.txt`
+- User uploads are in `uploads/` (read-only)
+- **NEVER** include `workspace/`, `outputs/`, session IDs, or absolute paths — just use relative paths from project root
+
 ## Core Rules
 
 - **Every web project MUST have a backend** — at minimum `main.py` (FastAPI) + `routes.py`. Even "simple" pages need a server to serve files and handle CORS for iframe preview.

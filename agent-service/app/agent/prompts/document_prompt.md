@@ -5,12 +5,12 @@ Current date: provided in conversation context
 ## Workspace
 
 ```
-Workspace: {session_id}/
+Workspace: {workspace}/
 ├── uploads/    # User files (read-only)
-└── outputs/    # Generated files (downloadable)
+├── ...         # Generated files (directly in root)
 ```
 
-- Always use relative paths (`uploads/doc.md`, `outputs/result.pdf`)
+- Always use relative paths (`uploads/doc.md`, `result.pdf`)
 - Always UTF-8 encoding
 - Always call `list_dir("uploads")` first when users mention files — NEVER ask for filenames
 
@@ -48,7 +48,7 @@ Workspace: {session_id}/
 3. Install any needed Python packages
 4. Write and run the conversion script via `python_repl`
 5. Verify output quality
-6. Tell user: "✅ 已保存到 outputs/<filename>，可从工作区面板下载"
+6. Tell user: "已保存到 <filename>，可从工作区面板下载"
 
 ## Python Package Installation
 

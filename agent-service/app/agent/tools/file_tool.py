@@ -2,15 +2,15 @@
 文件工具 - 提供文件系统的读写操作
 
 工作区路径规则：
-  - 所有操作限制在 WORKSPACE_ROOT/{session_id}/ 内
+  - 所有操作限制在 WORKSPACE_ROOT/{project_id}_{slug}/ 内
   - 相对路径自动解析为工作区内的路径
   - 绝对路径必须在工作区内，否则拒绝访问
 
 目录结构：
   WORKSPACE_ROOT/
-  └── {session_id}/
+  └── {project_id}_{slug}/
       ├── uploads/    # 用户上传的原始文件
-      └── outputs/    # Agent 生成的结果文件
+      └── ...         # Agent 生成的文件直接放根目录
 """
 import logging
 from pathlib import Path
@@ -51,7 +51,6 @@ def get_session_workspace(session_id: str, *, ensure: bool = True) -> Path:
                     if ensure:
                         workspace.mkdir(parents=True, exist_ok=True)
                         (workspace / "uploads").mkdir(exist_ok=True)
-                        (workspace / "outputs").mkdir(exist_ok=True)
                     return workspace
     except Exception:
         pass
@@ -60,7 +59,6 @@ def get_session_workspace(session_id: str, *, ensure: bool = True) -> Path:
     if ensure:
         workspace.mkdir(parents=True, exist_ok=True)
         (workspace / "uploads").mkdir(exist_ok=True)
-        (workspace / "outputs").mkdir(exist_ok=True)
     return workspace
 
 
@@ -95,11 +93,11 @@ def resolve_path(path: str, session_id: Optional[str] = None) -> Path:
 
 
 class _ReadFileInput(BaseModel):
-    path: str = Field(description="文件路径（相对于工作区的相对路径，如 uploads/data.csv）")
+    path: str = Field(description="文件路径（相对于工作区的相对路径，如 uploads/data.csv 或 report.md）")
 
 
 class _WriteFileInput(BaseModel):
-    path: str = Field(description="文件路径（相对于工作区的相对路径，如 outputs/report.md）")
+    path: str = Field(description="文件路径（相对于工作区的相对路径，如 report.md、chart.png）")
     content: str = Field(description="要写入的内容")
 
 
@@ -116,7 +114,7 @@ class ReadFileTool(BaseTool):
         "- Text files: .txt, .md, .csv, .py, .js, .json, etc.\n"
         "- Documents: .docx (Word), .pdf (PDF), .pptx (PowerPoint)\n"
         "For documents, automatically extracts text, tables, and images.\n"
-        "Use relative paths like 'uploads/report.pdf' or 'outputs/data.csv'."
+        "Use relative paths like 'uploads/report.pdf' or 'data.csv'."
     )
     args_schema: Type[BaseModel] = _ReadFileInput
     current_session_id: Optional[str] = None
@@ -260,7 +258,7 @@ class WriteFileTool(BaseTool):
     name: str = "write_file"
     description: str = (
         "Write content to a file in the workspace. "
-        "Use relative paths like 'outputs/report.md'. "
+        "Use relative paths like 'report.md'. "
         "Creates parent directories automatically."
     )
     args_schema: Type[BaseModel] = _WriteFileInput
@@ -283,7 +281,7 @@ class WriteFileTool(BaseTool):
 
 
 class _EditFileInput(BaseModel):
-    path: str = Field(description="文件路径（相对于工作区的相对路径，如 outputs/index.html）")
+    path: str = Field(description="文件路径（相对于工作区的相对路径，如 index.html）")
     old_string: str = Field(description="要被替换的原始文本（必须与文件中的内容精确匹配）")
     new_string: str = Field(description="替换后的新文本")
 
@@ -296,7 +294,7 @@ class EditFileTool(BaseTool):
         "Much more efficient than rewriting the entire file — use this for small changes. "
         "The old_string must match EXACTLY (including whitespace and indentation). "
         "If old_string appears multiple times, only the FIRST occurrence is replaced. "
-        "Use relative paths like 'outputs/index.html'."
+        "Use relative paths like 'index.html'."
     )
     args_schema: Type[BaseModel] = _EditFileInput
     current_session_id: Optional[str] = None
@@ -347,7 +345,7 @@ class ListDirTool(BaseTool):
     name: str = "list_dir"
     description: str = (
         "List files and directories in the workspace. "
-        "Default lists the session root. Use 'uploads' or 'outputs' for subdirectories."
+        "Default lists the session root. Use 'uploads' for user-uploaded files."
     )
     args_schema: Type[BaseModel] = _ListDirInput
     current_session_id: Optional[str] = None

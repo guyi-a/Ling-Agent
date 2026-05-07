@@ -46,13 +46,12 @@ async def _get_session_workspace(session_id: str, db: AsyncSession, *, ensure: b
             if ensure:
                 workspace.mkdir(parents=True, exist_ok=True)
                 (workspace / "uploads").mkdir(exist_ok=True)
-                (workspace / "outputs").mkdir(exist_ok=True)
             return workspace
 
     workspace = Path(settings.WORKSPACE_ROOT) / session_id
     if ensure:
-        (workspace / "uploads").mkdir(parents=True, exist_ok=True)
-        (workspace / "outputs").mkdir(parents=True, exist_ok=True)
+        workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / "uploads").mkdir(exist_ok=True)
     return workspace
 
 
@@ -113,28 +112,46 @@ async def list_files(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出会话工作区的文件（folder: 'uploads' | 'outputs' | '' 表示全部）"""
+    """列出会话工作区的文件（folder: 'uploads' | '' 表示全部）"""
     await _check_session_owner(session_id, current_user, db)
 
     workspace = await _get_session_workspace(session_id, db)
-    folders = ["uploads", "outputs"] if not folder else [folder]
 
     result = []
-    for f in folders:
-        d = workspace / f
-        if not d.is_dir():
-            continue
-        for item in sorted(d.rglob("*")):
+
+    if folder == "uploads":
+        # 只列 uploads 子目录
+        d = workspace / "uploads"
+        if d.is_dir():
+            for item in sorted(d.rglob("*")):
+                if not item.is_file():
+                    continue
+                stat = item.stat()
+                rel = item.relative_to(workspace)
+                result.append({
+                    "name": item.name,
+                    "path": str(rel),
+                    "folder": "uploads",
+                    "size": stat.st_size,
+                    "modified_at": stat.st_mtime,
+                })
+    else:
+        # 列出所有文件（包括根目录和 uploads）
+        SKIP_DIRS = {".venv", "__pycache__", "node_modules", ".proc", ".git"}
+        for item in sorted(workspace.rglob("*")):
             if not item.is_file():
                 continue
-            stat = item.stat()
+            # 跳过内部目录
             rel = item.relative_to(workspace)
+            if any(part in SKIP_DIRS for part in rel.parts):
+                continue
+            folder_name = rel.parts[0] if len(rel.parts) > 1 else ""
             result.append({
                 "name": item.name,
                 "path": str(rel),
-                "folder": f,
-                "size": stat.st_size,
-                "modified_at": stat.st_mtime,
+                "folder": folder_name,
+                "size": item.stat().st_size,
+                "modified_at": item.stat().st_mtime,
             })
 
     return {"session_id": session_id, "files": result}
@@ -146,29 +163,30 @@ async def list_projects(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出 outputs/projects/ 下的所有项目目录"""
+    """列出工作区根目录下的项目文件"""
     await _check_session_owner(session_id, current_user, db)
 
     workspace = await _get_session_workspace(session_id, db)
-    projects_dir = workspace / "outputs" / "projects"
 
     result = []
-    if projects_dir.is_dir():
-        for item in sorted(projects_dir.iterdir()):
-            if item.is_dir():
-                # 统计文件数和总大小
-                file_count = 0
-                total_size = 0
-                for f in item.rglob("*"):
-                    if f.is_file():
-                        file_count += 1
-                        total_size += f.stat().st_size
-                result.append({
-                    "name": item.name,
-                    "path": f"outputs/projects/{item.name}",
-                    "file_count": file_count,
-                    "total_size": total_size,
-                })
+    SKIP_DIRS = {"uploads", ".venv", "__pycache__", "node_modules", ".proc", ".git", "scripts", "data"}
+    if workspace.is_dir():
+        file_count = 0
+        total_size = 0
+        for f in workspace.rglob("*"):
+            if f.is_file():
+                rel = f.relative_to(workspace)
+                if any(part in SKIP_DIRS for part in rel.parts):
+                    continue
+                file_count += 1
+                total_size += f.stat().st_size
+        if file_count > 0:
+            result.append({
+                "name": workspace.name,
+                "path": ".",
+                "file_count": file_count,
+                "total_size": total_size,
+            })
 
     return {"session_id": session_id, "projects": result}
 
@@ -176,7 +194,7 @@ async def list_projects(
 @router.get("/{session_id}/tree")
 async def get_tree(
     session_id: str,
-    path: str = "outputs/projects",
+    path: str = ".",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -260,14 +278,14 @@ async def download_file(
     current_user: User = Depends(get_current_user_flexible),
     db: AsyncSession = Depends(get_db),
 ):
-    """下载工作区文件（folder: uploads | outputs）"""
+    """下载工作区文件"""
     await _check_session_owner(session_id, current_user, db)
 
-    if folder not in ("uploads", "outputs"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的目录")
+    workspace = (await _get_session_workspace(session_id, db)).resolve()
+    file_path = (workspace / folder / Path(filename).name).resolve()
 
-    workspace = await _get_session_workspace(session_id, db)
-    file_path = workspace / folder / Path(filename).name  # Path.name 防止路径穿越
+    if not file_path.is_relative_to(workspace):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径越界")
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
@@ -291,11 +309,11 @@ async def delete_file(
     """删除工作区文件"""
     await _check_session_owner(session_id, current_user, db)
 
-    if folder not in ("uploads", "outputs"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的目录")
+    workspace = (await _get_session_workspace(session_id, db)).resolve()
+    file_path = (workspace / folder / Path(filename).name).resolve()
 
-    workspace = await _get_session_workspace(session_id, db)
-    file_path = workspace / folder / Path(filename).name
+    if not file_path.is_relative_to(workspace):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径越界")
 
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")

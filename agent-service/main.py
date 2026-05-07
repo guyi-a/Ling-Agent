@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from app.models import *
 
 # 导入路由
-from app.routers import auth_router, user_router, project_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router, health_router
+from app.routers import auth_router, user_router, project_router, session_router, message_router, chat_router, workspace_router, dev_router, preview_router, health_router, llm_router
 
 # 在应用程序启动时创建数据库表
 @asynccontextmanager
@@ -158,6 +158,7 @@ app.include_router(workspace_router)
 app.include_router(dev_router)
 app.include_router(preview_router)
 app.include_router(health_router)
+app.include_router(llm_router)
 
 # 根路径
 @app.get("/")

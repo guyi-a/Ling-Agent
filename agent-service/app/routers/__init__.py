@@ -11,6 +11,7 @@ from .workspace import router as workspace_router
 from .dev import router as dev_router
 from .preview import router as preview_router
 from .health import router as health_router
+from .llm import router as llm_router
 
 __all__ = [
     "auth_router",
@@ -23,4 +24,5 @@ __all__ = [
     "dev_router",
     "preview_router",
     "health_router",
+    "llm_router",
 ]

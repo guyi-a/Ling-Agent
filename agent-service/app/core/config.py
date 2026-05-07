@@ -13,16 +13,19 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./app.db"
 
-    # LLM Configuration (智谱 GLM)
-    LLM_API_KEY: Optional[str] = None
-    LLM_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
-    LLM_MODEL: str = "glm-4.7"
-    LLM_MODEL_ROUTER: str = "glm-4.7"
-    LLM_MODEL_DEVELOPER: str = "glm-5.1"
-    LLM_MODEL_GENERAL: str = "glm-4.7"
-    LLM_MODEL_PSYCH: str = "glm-4.7"
-    LLM_MODEL_DATA: str = "glm-4.7"
-    LLM_MODEL_DOCUMENT: str = "glm-4.7"
+    # LLM Provider API Keys（配置哪个就启用哪个 provider，模型列表见 config/providers.json）
+    ZHIPU_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
+    QWEN_API_KEY: Optional[str] = None
+
+    # 各 Agent 模型配置
+    LLM_MODEL: str = "deepseek-chat"
+    LLM_MODEL_ROUTER: str = "deepseek-chat"
+    LLM_MODEL_DEVELOPER: str = "deepseek-chat"
+    LLM_MODEL_GENERAL: str = "deepseek-chat"
+    LLM_MODEL_PSYCH: str = "deepseek-chat"
+    LLM_MODEL_DATA: str = "deepseek-chat"
+    LLM_MODEL_DOCUMENT: str = "deepseek-chat"
 
     # Workspace Configuration
     WORKSPACE_ROOT: str = "./workspace"
@@ -49,8 +52,6 @@ class Settings(BaseSettings):
     RAG_ENABLED: bool = True
     RAG_INDEX_DIR: str = "data/vector_store"
     RAG_KNOWLEDGE_DIR: str = "data/knowledge_base"
-    RAG_API_KEY: Optional[str] = None
-    RAG_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     RAG_EMBEDDING_MODEL: str = "text-embedding-v3"
     RAG_CHUNK_SIZE: int = 500
     RAG_CHUNK_OVERLAP: int = 100
@@ -60,7 +61,7 @@ class Settings(BaseSettings):
     COMPACT_ENABLED: bool = True
     COMPACT_TOKEN_THRESHOLD: int = 30000
     COMPACT_KEEP_TURNS: int = 2
-    COMPACT_MODEL: str = "glm-4.7"
+    COMPACT_MODEL: str = "deepseek-chat"
     COMPACT_SUMMARY_MAX_TOKENS: int = 1500
 
     # JWT Configuration

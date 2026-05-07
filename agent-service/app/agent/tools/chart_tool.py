@@ -112,7 +112,7 @@ class GenerateHealthChartTool(BaseTool):
             from app.core.config import settings
             workspace = Path(settings.WORKSPACE_ROOT).resolve()
             workspace.mkdir(parents=True, exist_ok=True)
-        charts_dir = workspace / "outputs" / "charts"
+        charts_dir = workspace / "charts"
         charts_dir.mkdir(parents=True, exist_ok=True)
         return charts_dir
 
@@ -127,7 +127,7 @@ class GenerateHealthChartTool(BaseTool):
             full_html=True,
             config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]},
         )
-        return f"outputs/charts/{filename}"
+        return f"charts/{filename}"
 
     # ── 情绪趋势折线图 ──
 

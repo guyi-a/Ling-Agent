@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Ban, Shield, Zap, Wrench, FolderOpen, Eye, Globe, ExternalLink, RotateCw } from 'lucide-react'
+import { Send, StopCircle, Loader2, CheckCircle, Clock, Paperclip, Save, X, Sun, Moon, ChevronRight, Ban, Shield, Zap, Wrench, FolderOpen, Eye } from 'lucide-react'
 import Logo from '@/components/Logo'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -124,7 +124,7 @@ export default function ChatPage() {
   const [deleteAfterDialogOpen, setDeleteAfterDialogOpen] = useState(false)
   const [deletingAfterMessageId, setDeletingAfterMessageId] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [activePorts, setActivePorts] = useState<Set<number>>(new Set())
+  const [runningApps, setRunningApps] = useState<{ name: string; port: number }[]>([])
   const [sidebarWidth, setSidebarWidth] = useState(256)
   const [isDragging, setIsDragging] = useState<'left' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -142,9 +142,10 @@ export default function ChatPage() {
   const refreshActivePorts = useCallback(async (sessionId: string) => {
     try {
       const procs = await devApi.listProcesses(sessionId)
-      setActivePorts(new Set(procs.filter(p => p.status === 'running' && p.port).map(p => p.port!)))
+      const running = procs.filter(p => p.status === 'running' && p.port)
+      setRunningApps(running.map(p => ({ name: p.name, port: p.port! })))
     } catch {
-      setActivePorts(new Set())
+      setRunningApps([])
     }
   }, [])
 
@@ -646,6 +647,7 @@ export default function ChatPage() {
     } else {
       setMessages([])
       setSessionTitle('')
+      setRunningApps([])
     }
   }
 
@@ -760,6 +762,24 @@ export default function ChatPage() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
+              {runningApps.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {runningApps.map(app => (
+                    <button
+                      key={app.port}
+                      onClick={() => {
+                        setPreviewUrl(`/api/preview/${app.port}`)
+                        setPreviewTitle(app.name)
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="font-medium whitespace-nowrap">{app.name}</span>
+                      <span className="font-mono opacity-70">:{app.port}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {(selectedSessionId || currentSessionId) && (
                 <button
                   onClick={() => {
@@ -1182,76 +1202,6 @@ export default function ChatPage() {
                           })}
                         </div>
 
-                        {/* 应用预览入口 */}
-                        {!msg.isStreaming && (() => {
-                          const apps = msg.parts
-                            .filter(p => p.type === 'tool' && p.toolName === 'dev_run' && p.toolStatus === 'done' && p.toolOutput)
-                            .map(p => {
-                              const portMatch = p.toolOutput!.match(/Port:\s*(\d+)/)
-                              const nameMatch = p.toolOutput!.match(/Process '([^']+)'/)
-                              if (!portMatch) return null
-                              const port = parseInt(portMatch[1])
-                              return { port, name: nameMatch?.[1] || 'app', alive: activePorts.has(port) }
-                            })
-                            .filter(Boolean) as { port: number; name: string; alive: boolean }[]
-                          if (apps.length === 0) return null
-                          return (
-                            <div className="mt-3 space-y-2">
-                              {apps.map(app => (
-                                <div
-                                  key={app.port}
-                                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                                    app.alive
-                                      ? 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-                                      : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/20'
-                                  }`}
-                                  onClick={() => {
-                                    if (!app.alive) return
-                                    setPreviewUrl(`/api/preview/${app.port}`)
-                                    setPreviewTitle(app.name)
-                                  }}
-                                >
-                                  <div className={`relative w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                    app.alive ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-gray-100 dark:bg-gray-800/40'
-                                  }`}>
-                                    <Globe className={`w-4 h-4 ${app.alive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`} />
-                                    {app.alive && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white dark:border-[#1a1a24]" />}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-sm font-medium truncate ${app.alive ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>{app.name}</span>
-                                      {app.alive && (
-                                        <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded">:{app.port}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {app.alive ? (
-                                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                                      点击前往
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </span>
-                                  ) : (
-                                    <button
-                                      className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 flex-shrink-0"
-                                      onClick={async (e) => {
-                                        e.stopPropagation()
-                                        const sid = selectedSessionId || currentSessionId
-                                        if (!sid) return
-                                        try {
-                                          await devApi.restartProcess(sid, app.name)
-                                          refreshActivePorts(sid)
-                                        } catch { /* ignore */ }
-                                      }}
-                                    >
-                                      <RotateCw className="w-3.5 h-3.5" />
-                                      重启
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )
-                        })()}
 
                         {/* 审批卡片 */}
                         {msg.approvalRequest && (
@@ -1322,6 +1272,7 @@ export default function ChatPage() {
             <div ref={messagesEndRef} />
           </div>
         </main>
+
 
         {/* Input */}
         <footer className="border-t border-gray-200 dark:border-gray-800 p-4 bg-white/80 dark:bg-[#22222e]/80 backdrop-blur">

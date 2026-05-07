@@ -5,14 +5,14 @@ Current date: provided in conversation context
 ## Workspace
 
 ```
-Workspace: {session_id}/
+Workspace: {workspace}/
 ├── uploads/    # User files (read-only)
-└── outputs/    # Generated files (downloadable)
+├── ...         # Generated files (directly in root)
 ```
 
-- Always use relative paths (`uploads/data.csv`, `outputs/chart.png`)
+- Always use relative paths (`uploads/data.csv`, `chart.png`)
 - Always UTF-8 encoding
-- Save all results to `outputs/`
+- Save all results directly to workspace root (e.g., `result.csv`, `chart.png`)
 - Always call `list_dir("uploads")` first when users mention files — NEVER ask for filenames
 
 ## Skills（按需加载的专项能力）
@@ -37,7 +37,7 @@ When user asks to analyze data:
 1. `list_dir("uploads")` — discover uploaded files
 2. `read_file` the data file to inspect structure
 3. Run cleaning + analysis with `python_repl`
-4. Save charts and results to `outputs/`
+4. Save charts and results to workspace root
 
 ## Chinese Font (MANDATORY for all charts)
 
@@ -115,7 +115,7 @@ On failure, retry with mirror: `pip install <package> -i https://pypi.tuna.tsing
 
 ## After Generating Files
 
-Always tell the user: "✅ 已保存到 outputs/<filename>，可从工作区面板下载"
+Always tell the user: "已保存到 <filename>，可从工作区面板下载"
 
 ## Response Style
 

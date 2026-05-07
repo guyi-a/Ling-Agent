@@ -160,6 +160,21 @@ def _is_process_alive(pid: Optional[int]) -> bool:
         return False
 
 
+def _kill_port_holder(port: int) -> None:
+    """按端口找到占用进程并杀掉"""
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.strip().split('\n'):
+            if line.strip().isdigit():
+                pid = int(line.strip())
+                _kill_tree(pid)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+
 def _kill_tree(pid: int) -> None:
     """终止进程及其子进程"""
     if platform.system() == "Windows":
@@ -277,9 +292,14 @@ def stop_process(session_id: str, name: str) -> None:
     if pid and _is_process_alive(pid):
         _kill_tree(pid)
 
+    # 按端口兜底杀（pid 文件可能已丢失或进程 fork 了新 PID）
+    port = meta.get("port") if meta else None
+    if port and not _is_port_free(port):
+        _kill_port_holder(port)
+
     # 释放端口
-    if meta and meta.get("port"):
-        release_port(meta["port"])
+    if port:
+        release_port(port)
 
     # 清理 PID 文件（保留 meta 和日志供查看）
     pid_file = pdir / "pid"
@@ -290,7 +310,7 @@ def stop_process(session_id: str, name: str) -> None:
 
 
 def restart_process(session_id: str, name: str) -> dict:
-    """重启进程：读 meta → 停旧进程 → 分配新端口 → 启动"""
+    """重启进程：读 meta → 停旧进程 → 复用端口 → 启动"""
     pdir = _proc_dir(session_id, name)
     meta = _read_meta(pdir)
     if not meta:
@@ -300,16 +320,26 @@ def restart_process(session_id: str, name: str) -> dict:
     workdir = Path(meta["workdir"])
     old_port = meta.get("port")
 
-    # 停掉旧进程并释放旧端口
+    # 停掉旧进程
     pid = _read_pid(pdir)
     if pid and _is_process_alive(pid):
         _kill_tree(pid)
+
+    # 如果端口仍被占用（旧进程没干净退出），按端口杀
+    if old_port and not _is_port_free(old_port):
+        _kill_port_holder(old_port)
+
     if old_port:
         release_port(old_port)
 
-    # 分配新端口，替换命令中的旧端口
-    new_port = allocate_port()
-    if old_port:
+    # 复用旧端口（如果可用），否则分配新端口
+    if old_port and _is_port_free(old_port):
+        new_port = old_port
+        _allocated_ports.add(new_port)
+    else:
+        new_port = allocate_port()
+
+    if old_port and new_port != old_port:
         old_str = str(old_port)
         new_str = str(new_port)
         for i, arg in enumerate(command):
@@ -318,9 +348,16 @@ def restart_process(session_id: str, name: str) -> dict:
             elif arg.startswith("--port="):
                 command[i] = f"--port={new_str}"
 
+    # workdir 不存在时回退到当前 workspace
+    if not workdir.exists():
+        workdir = _resolve_workspace(session_id)
+        if not workdir.exists():
+            raise RuntimeError(f"Workspace not found for session {session_id[:8]}")
+
     # 更新 meta
     meta["command"] = command
     meta["port"] = new_port
+    meta["workdir"] = str(workdir)
     (pdir / "meta.json").write_text(json.dumps(meta))
 
     # 清空日志并启动

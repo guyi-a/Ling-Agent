@@ -52,6 +52,10 @@ async def proxy_to_local(port: int, path: str, request: Request) -> Response:
         if k.lower() not in _STRIP_HEADERS and k.lower() != "transfer-encoding":
             resp_headers[k] = v
 
+    content_type = proxy_resp.headers.get("content-type", "")
+    if "text/html" in content_type:
+        resp_headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+
     return Response(
         content=proxy_resp.content,
         status_code=proxy_resp.status_code,

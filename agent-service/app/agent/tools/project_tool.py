@@ -116,7 +116,6 @@ class MaterializeProjectTool(BaseTool):
         project_dir = Path(settings.WORKSPACE_ROOT) / dir_name
         project_dir.mkdir(parents=True)
         (project_dir / "uploads").mkdir(exist_ok=True)
-        (project_dir / "outputs").mkdir(exist_ok=True)
 
         logger.info(f"Project materialized: '{title}' at {project_dir}")
         return f"项目「{title}」已创建，工作区: {project_dir}"
