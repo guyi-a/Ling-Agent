@@ -129,14 +129,14 @@ export default function DiaryPage() {
   }
 
   const sortedRecords = [...records].sort((a, b) => {
-    const diff = parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime()
+    const diff = parseBackendTime(b.created_at).getTime() - parseBackendTime(a.created_at).getTime()
     return sortOrder === 'newest' ? diff : -diff
   })
   const totalPages = Math.max(1, Math.ceil(sortedRecords.length / PAGE_SIZE))
   const pagedRecords = sortedRecords.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const pagedGrouped = pagedRecords.reduce<Record<string, HealthRecord[]>>((acc, r) => {
-    const date = parseUTC(r.created_at).toLocaleDateString('zh-CN')
+    const date = parseBackendTime(r.created_at).toLocaleDateString('zh-CN')
     if (!acc[date]) acc[date] = []
     acc[date].push(r)
     return acc
@@ -150,7 +150,7 @@ export default function DiaryPage() {
       emotionCounts[r.emotion!] = (emotionCounts[r.emotion!] || 0) + 1
     })
     const topEmotion = Object.entries(emotionCounts).sort((a, b) => b[1] - a[1])[0]
-    const uniqueDays = new Set(records.map(r => parseUTC(r.created_at).toLocaleDateString('zh-CN'))).size
+    const uniqueDays = new Set(records.map(r => parseBackendTime(r.created_at).toLocaleDateString('zh-CN'))).size
     return { bodyCount, emotionCount, topEmotion, uniqueDays }
   }, [records])
 
@@ -300,7 +300,7 @@ export default function DiaryPage() {
                             {isActive && (
                               <div className="px-3 py-3 bg-gray-100/60 dark:bg-white/[0.03] rounded-lg text-sm diary-card-enter">
                                 <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
-                                  {parseUTC(r.created_at).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} {formatTime(r.created_at)}
+                                  {parseBackendTime(r.created_at).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} {formatTime(r.created_at)}
                                 </p>
                                 {isBody ? (
                                   <>
