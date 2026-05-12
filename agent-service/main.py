@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 import os
 from contextlib import asynccontextmanager
 from app.core.config import settings
+from app.core.trace_middleware import TraceContextMiddleware
 from app.database.session import engine, Base
 from app.utils import setup_logging
 
@@ -28,7 +29,9 @@ async def lifespan(app: FastAPI):
     # 配置日志系统（只在 worker 进程中执行一次）
     setup_logging(level=settings.LOG_LEVEL)
 
-    # 启动时创建数据库表
+    # 先跑 Alembic migration（同步），再 create_all 兜底建新表
+    from app.database.migrate import run_alembic_upgrade
+    run_alembic_upgrade()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -146,6 +149,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Trace 上下文中间件（必须在所有其他 middleware 之前 add，
+# 这样它在请求链的最外层，所有内层代码都能看到 ContextVar）
+app.add_middleware(TraceContextMiddleware)
 
 # 注册路由
 app.include_router(auth_router)

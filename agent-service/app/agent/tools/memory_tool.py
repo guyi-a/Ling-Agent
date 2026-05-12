@@ -14,6 +14,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.agent.tools._ctx import get_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +95,13 @@ class SaveMemoryTool(BaseTool):
     current_user_id: str = ""
 
     def _run(self, name: str, content: str) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: user_id not available"
 
         slug = _slugify(name)
-        lock = _get_lock(self.current_user_id)
+        lock = _get_lock(get_user_id())
         with lock:
-            entries = _read_entries(self.current_user_id)
+            entries = _read_entries(get_user_id())
 
             updated = False
             for i, (n, _) in enumerate(entries):
@@ -111,9 +112,9 @@ class SaveMemoryTool(BaseTool):
             if not updated:
                 entries.append((slug, content))
 
-            _write_entries(self.current_user_id, entries)
+            _write_entries(get_user_id(), entries)
 
-        logger.info(f"💾 记忆已保存: {slug}={content!r} (user: {self.current_user_id[:8]}...)")
+        logger.info(f"💾 记忆已保存: {slug}={content!r} (user: {get_user_id()[:8]}...)")
         return f"已记住: {name}"
 
 
@@ -127,19 +128,19 @@ class DeleteMemoryTool(BaseTool):
     current_user_id: str = ""
 
     def _run(self, name: str) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: user_id not available"
 
         slug = _slugify(name)
-        lock = _get_lock(self.current_user_id)
+        lock = _get_lock(get_user_id())
         with lock:
-            entries = _read_entries(self.current_user_id)
+            entries = _read_entries(get_user_id())
             new_entries = [(n, c) for n, c in entries if n != slug]
 
             if len(new_entries) == len(entries):
                 return f"未找到名为 '{name}' 的记忆"
 
-            _write_entries(self.current_user_id, new_entries)
+            _write_entries(get_user_id(), new_entries)
 
-        logger.info(f"🗑️ 记忆已删除: {slug} (user: {self.current_user_id[:8]}...)")
+        logger.info(f"🗑️ 记忆已删除: {slug} (user: {get_user_id()[:8]}...)")
         return f"已忘记: {name}"

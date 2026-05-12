@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, update
 from typing import Optional, List, Dict
 from datetime import datetime
-import uuid
 import json
+import uuid
 
 from app.models.message import Message
 from app.schemas.message import MessageCreate
@@ -62,16 +62,12 @@ class MessageCRUD:
         """创建消息"""
         message_id = str(uuid.uuid4())
 
-        extra_data_json = None
-        if message_in.extra_data:
-            extra_data_json = json.dumps(message_in.extra_data)
-
         db_message = Message(
             message_id=message_id,
             session_id=message_in.session_id,
             role=message_in.role,
             content=message_in.content,
-            extra_data=extra_data_json,
+            extra_data=message_in.extra_data,
         )
 
         db.add(db_message)
@@ -139,12 +135,7 @@ class MessageCRUD:
 
         result = []
         for msg in messages:
-            extra = {}
-            if msg.extra_data:
-                try:
-                    extra = json.loads(msg.extra_data)
-                except Exception:
-                    pass
+            extra = msg.extra_data if isinstance(msg.extra_data, dict) else {}
 
             if msg.role == "tool":
                 tool_call_id = extra.get("tool_call_id", "")
@@ -208,13 +199,13 @@ class MessageCRUD:
         msg = result.scalar_one_or_none()
         if not msg:
             return False
-        existing = json.loads(msg.extra_data) if msg.extra_data else {}
+        existing = dict(msg.extra_data) if isinstance(msg.extra_data, dict) else {}
         for k, v in updates.items():
             if v is None:
                 existing.pop(k, None)
             else:
                 existing[k] = v
-        msg.extra_data = json.dumps(existing, ensure_ascii=False)
+        msg.extra_data = existing
         await db.commit()
         return True
 
@@ -311,12 +302,7 @@ class MessageCRUD:
 
         out = []
         for msg in messages:
-            extra = {}
-            if msg.extra_data:
-                try:
-                    extra = json.loads(msg.extra_data)
-                except Exception:
-                    pass
+            extra = msg.extra_data if isinstance(msg.extra_data, dict) else {}
 
             if msg.role == "tool":
                 tool_call_id = extra.get("tool_call_id", "")

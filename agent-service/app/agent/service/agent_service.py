@@ -13,7 +13,7 @@ from langgraph.types import Command
 
 from app.agent.infra.agent_factory import create_Ling_Agent, get_checkpointer
 from app.agent.infra.llm_factory import get_llm
-from app.agent.tools.registry import get_all_tools, set_session_id, set_user_id
+from app.agent.tools.registry import get_all_tools
 from app.crud.message import message_crud
 from app.schemas.message import MessageCreate
 from app.core.approval import request_approval, make_request_id, HIGH_RISK_TOOLS, should_approve
@@ -126,9 +126,7 @@ class AgentService:
             return "抱歉，Agent 服务暂时不可用。请稍后重试。"
         
         try:
-            # 注入 session_id 到文件工具
-            set_session_id(session_id)
-
+            # session_id 已由 Pipeline 注入 ContextVar，工具自动读取。
             # 构建消息上下文（支持多模态）
             messages = self._build_messages(
                 user_message, history, None,
@@ -278,15 +276,8 @@ class AgentService:
         # 复制原始消息的所有字段（保留 tool_call_id, tool_calls, name 等）
         result = {k: v for k, v in msg.items() if k not in ["extra_data"]}
 
-        # 提取附件信息
-        extra_data = msg.get("extra_data", {})
-        if isinstance(extra_data, str):
-            import json
-            try:
-                extra_data = json.loads(extra_data)
-            except:
-                extra_data = {}
-
+        # 提取附件信息（extra_data 已由 JSONText 保证为 dict）
+        extra_data = msg.get("extra_data") or {}
         attachments = extra_data.get("attachments", [])
 
         # 如果没有附件，直接返回原始消息（保留所有字段）
@@ -413,9 +404,7 @@ class AgentService:
         self._active_tasks[session_id] = current_task
         logger.info(f"🚀 会话 {session_id[:8]}... 开始执行")
 
-        set_session_id(session_id)
-        if user_id:
-            set_user_id(user_id)
+        # session_id / user_id 已由 Pipeline 注入 ContextVar（StartAgentStage）
 
         last_input_tokens = 0
 

@@ -9,6 +9,8 @@ from typing import Optional, Type
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from app.agent.tools._ctx import get_user_id
+
 SCALES_DIR = Path(__file__).parent.parent / "data" / "scales"
 
 logger = logging.getLogger(__name__)
@@ -125,14 +127,14 @@ class GetHealthRecordsTool(BaseTool):
         return asyncio.get_event_loop().run_until_complete(self._arun(days))
 
     async def _arun(self, days: int = 30) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: 未获取到用户信息"
         try:
             from app.crud.health import health_record_crud
             db = await _get_db_session()
             try:
                 records = await health_record_crud.get_by_user(
-                    db, self.current_user_id, days=days, limit=100
+                    db, get_user_id(), days=days, limit=100
                 )
                 if not records:
                     return f"最近 {days} 天没有健康日记记录。"
@@ -172,14 +174,14 @@ class GetAssessmentHistoryTool(BaseTool):
         return asyncio.get_event_loop().run_until_complete(self._arun(limit))
 
     async def _arun(self, limit: int = 5) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: 未获取到用户信息"
         try:
             from app.crud.health import assessment_crud
             db = await _get_db_session()
             try:
                 records = await assessment_crud.get_by_user(
-                    db, self.current_user_id, limit=limit
+                    db, get_user_id(), limit=limit
                 )
                 if not records:
                     return "暂无测评记录。"
@@ -229,7 +231,7 @@ class SaveHealthRecordTool(BaseTool):
         emotion_level: Optional[int] = None, trigger: Optional[str] = None,
         notes: Optional[str] = None,
     ) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: 未获取到用户信息"
         if record_type not in ("body", "emotion"):
             return "Error: record_type 必须为 body 或 emotion"
@@ -244,7 +246,7 @@ class SaveHealthRecordTool(BaseTool):
                     symptoms=symptoms, emotion=emotion,
                     emotion_level=emotion_level, trigger=trigger, notes=notes,
                 )
-                record = await health_record_crud.create(db, data, self.current_user_id)
+                record = await health_record_crud.create(db, data, get_user_id())
                 return f"已保存{('身体不适' if record_type == 'body' else '情绪')}记录 (ID: {record.record_id[:8]}...)"
             finally:
                 await db.close()
@@ -269,7 +271,7 @@ class SubmitAssessmentTool(BaseTool):
         return asyncio.get_event_loop().run_until_complete(self._arun(**kwargs))
 
     async def _arun(self, scale_type: str, answers: str) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: 未获取到用户信息"
         try:
             answer_list = json.loads(answers)
@@ -284,7 +286,7 @@ class SubmitAssessmentTool(BaseTool):
             db = await _get_db_session()
             try:
                 data = AssessmentSubmit(scale_type=scale_type, answers=answer_list)
-                record = await assessment_crud.create(db, data, self.current_user_id)
+                record = await assessment_crud.create(db, data, get_user_id())
                 resp = {
                     "scale": record.scale_type,
                     "total_score": record.total_score,

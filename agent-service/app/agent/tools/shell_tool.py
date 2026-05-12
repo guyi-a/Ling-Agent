@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.agent.tools.file_tool import get_session_workspace
+from app.agent.tools._ctx import get_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +126,8 @@ class ShellTool(BaseTool):
         return await loop.run_in_executor(None, _run)
 
     async def _execute(self, command: str, timeout: int) -> str:
-        if self.current_session_id:
-            cwd = get_session_workspace(self.current_session_id)
+        if get_session_id():
+            cwd = get_session_workspace(get_session_id())
         else:
             cwd = Path(settings.WORKSPACE_ROOT).resolve()
             cwd.mkdir(parents=True, exist_ok=True)

@@ -11,6 +11,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from app.agent.tools.file_tool import get_session_workspace
+from app.agent.tools._ctx import get_session_id, get_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ class GenerateHealthChartTool(BaseTool):
             return f"Error: {e}"
 
     async def _arun(self, chart_type: str, days: int = 30) -> str:
-        if not self.current_user_id:
+        if not get_user_id():
             return "Error: 未获取到用户信息"
 
         handlers = {
@@ -106,8 +107,8 @@ class GenerateHealthChartTool(BaseTool):
             return f"Error: 生成图表失败 - {e}"
 
     def _get_output_dir(self) -> Path:
-        if self.current_session_id:
-            workspace = get_session_workspace(self.current_session_id)
+        if get_session_id():
+            workspace = get_session_workspace(get_session_id())
         else:
             from app.core.config import settings
             workspace = Path(settings.WORKSPACE_ROOT).resolve()
@@ -138,7 +139,7 @@ class GenerateHealthChartTool(BaseTool):
         db = await _get_db()
         try:
             records = await health_record_crud.get_by_user(
-                db, self.current_user_id, record_type="emotion", days=days, limit=500
+                db, get_user_id(), record_type="emotion", days=days, limit=500
             )
         finally:
             await db.close()
@@ -192,7 +193,7 @@ class GenerateHealthChartTool(BaseTool):
         from app.crud.health import assessment_crud
         db = await _get_db()
         try:
-            records = await assessment_crud.get_by_user(db, self.current_user_id, limit=100)
+            records = await assessment_crud.get_by_user(db, get_user_id(), limit=100)
         finally:
             await db.close()
 
@@ -252,7 +253,7 @@ class GenerateHealthChartTool(BaseTool):
         db = await _get_db()
         try:
             records = await health_record_crud.get_by_user(
-                db, self.current_user_id, record_type="body", days=days, limit=500
+                db, get_user_id(), record_type="body", days=days, limit=500
             )
         finally:
             await db.close()

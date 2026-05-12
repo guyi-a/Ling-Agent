@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.agent.tools.file_tool import get_session_workspace
+from app.agent.tools._ctx import get_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,8 @@ class PythonReplTool(BaseTool):
     async def _execute(self, code: str, filename: Optional[str],
                        old_string: Optional[str], new_string: Optional[str],
                        timeout: int) -> str:
-        if self.current_session_id:
-            cwd = get_session_workspace(self.current_session_id)
+        if get_session_id():
+            cwd = get_session_workspace(get_session_id())
         else:
             cwd = Path(settings.WORKSPACE_ROOT).resolve()
             cwd.mkdir(parents=True, exist_ok=True)

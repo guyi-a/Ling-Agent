@@ -18,6 +18,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from app.agent.tools.file_tool import get_session_workspace
+from app.agent.tools._ctx import get_session_id
 from app.agent.service.process_manager import (
     start_process as pm_start,
     stop_process as pm_stop,
@@ -76,10 +77,10 @@ class DevRunTool(BaseTool):
         port: Optional[int] = None,
         workdir: Optional[str] = None,
     ) -> str:
-        if not self.current_session_id:
+        if not get_session_id():
             return "Error: session_id not set"
 
-        workspace = get_session_workspace(self.current_session_id)
+        workspace = get_session_workspace(get_session_id())
         if workdir:
             work_path = (workspace / workdir).resolve()
             if not work_path.is_relative_to(workspace):
@@ -113,7 +114,7 @@ class DevRunTool(BaseTool):
 
         try:
             info = pm_start(
-                session_id=self.current_session_id,
+                session_id=get_session_id(),
                 name=name,
                 command=cmd_list,
                 workdir=work_path,
@@ -157,15 +158,15 @@ class DevStopTool(BaseTool):
         return self._run(**kwargs)
 
     def _execute(self, name: str) -> str:
-        if not self.current_session_id:
+        if not get_session_id():
             return "Error: session_id not set"
 
         try:
-            pm_status(self.current_session_id, name)
+            pm_status(get_session_id(), name)
         except KeyError:
             return f"Error: process '{name}' not found"
 
-        pm_stop(self.current_session_id, name)
+        pm_stop(get_session_id(), name)
         return f"Process '{name}' stopped."
 
 
@@ -196,11 +197,11 @@ class DevRestartTool(BaseTool):
         return self._run(**kwargs)
 
     def _execute(self, name: str) -> str:
-        if not self.current_session_id:
+        if not get_session_id():
             return "Error: session_id not set"
 
         try:
-            info = pm_restart(self.current_session_id, name)
+            info = pm_restart(get_session_id(), name)
         except KeyError:
             return f"Error: process '{name}' not found"
         except RuntimeError as e:
@@ -238,11 +239,11 @@ class DevLogsTool(BaseTool):
         return self._execute(**kwargs)
 
     def _execute(self, name: str, lines: int = 50) -> str:
-        if not self.current_session_id:
+        if not get_session_id():
             return "Error: session_id not set"
 
         try:
-            log_lines = pm_get_logs(self.current_session_id, name, lines)
+            log_lines = pm_get_logs(get_session_id(), name, lines)
         except KeyError:
             return f"Error: process '{name}' not found"
 

@@ -5,9 +5,10 @@
   每个工具文件（*_tool.py）暴露 BaseTool 子类。
   registry 统一实例化，供 AgentService 使用。
 
-session_id 注入：
-  文件工具持有 current_session_id 属性，
-  AgentService.process_message 调用前通过 set_session_id() 注入。
+session_id / user_id 注入：
+  由 app.core.trace_context 的 ContextVar 承载，工具通过
+  app.agent.tools._ctx 的 get_session_id() / get_user_id() 读取。
+  set_session_id / set_user_id 保留为空函数以维持向后兼容。
 
 工具分组：
   get_all_tools()       — 全量（兼容单 Agent 模式）
@@ -38,7 +39,14 @@ from app.agent.tools.memory_tool import SaveMemoryTool, DeleteMemoryTool
 from app.agent.tools.rag_tool import SearchKnowledgeTool
 from app.agent.mcp.client import get_mcp_tools
 
+from app.agent.tools.safe_toolset import safe_wrap
+
 logger = logging.getLogger(__name__)
+
+
+def _safe_list(tools: List[BaseTool]) -> List[BaseTool]:
+    """给一组工具统一包 SafeTool。"""
+    return [safe_wrap(t) for t in tools]
 
 # ── 工具单例 ──────────────────────────────────────────────
 
@@ -72,32 +80,13 @@ _web_search_tool = WebSearchTool()
 
 
 def set_session_id(session_id: str) -> None:
-    """在每次对话前注入 session_id 到文件工具"""
-    _read_file_tool.current_session_id = session_id
-    _write_file_tool.current_session_id = session_id
-    _edit_file_tool.current_session_id = session_id
-    _list_dir_tool.current_session_id = session_id
-    _chunked_write_tool.current_session_id = session_id
-    _shell_tool.current_session_id = session_id
-    _python_repl_tool.current_session_id = session_id
-    _generate_health_chart_tool.current_session_id = session_id
-    _browser_use_tool.current_session_id = session_id
-    _dev_run_tool.current_session_id = session_id
-    _dev_stop_tool.current_session_id = session_id
-    _dev_restart_tool.current_session_id = session_id
-    _dev_logs_tool.current_session_id = session_id
-    _materialize_project_tool.current_session_id = session_id
+    """Deprecated：session_id 已由 ContextVar 承载。
+    保留空实现给暂未迁移的调用点，调用无效果。"""
 
 
 def set_user_id(user_id: str) -> None:
-    """在每次对话前注入 user_id 到健康工具和记忆工具"""
-    _get_health_records_tool.current_user_id = user_id
-    _get_assessment_history_tool.current_user_id = user_id
-    _save_health_record_tool.current_user_id = user_id
-    _submit_assessment_tool.current_user_id = user_id
-    _generate_health_chart_tool.current_user_id = user_id
-    _save_memory_tool.current_user_id = user_id
-    _delete_memory_tool.current_user_id = user_id
+    """Deprecated：user_id 已由 ContextVar 承载。
+    保留空实现给暂未迁移的调用点，调用无效果。"""
 
 
 # ── 工具组合（共享单例引用） ──────────────────────────────
@@ -148,7 +137,7 @@ def get_general_tools() -> List[BaseTool]:
     skill_tool = create_skill_tool()
     if skill_tool:
         tools.append(skill_tool)
-    return tools
+    return _safe_list(tools)
 
 
 def get_developer_tools() -> List[BaseTool]:
@@ -164,7 +153,7 @@ def get_developer_tools() -> List[BaseTool]:
     skill_tool = create_skill_tool()
     if skill_tool:
         tools.append(skill_tool)
-    return tools
+    return _safe_list(tools)
 
 
 def get_psych_tools() -> List[BaseTool]:
@@ -175,7 +164,7 @@ def get_psych_tools() -> List[BaseTool]:
         _web_search_tool,
     ]
     tools.extend(_rag_tools())
-    return tools
+    return _safe_list(tools)
 
 
 def get_data_tools() -> List[BaseTool]:
@@ -188,7 +177,7 @@ def get_data_tools() -> List[BaseTool]:
     skill_tool = create_skill_tool()
     if skill_tool:
         tools.append(skill_tool)
-    return tools
+    return _safe_list(tools)
 
 
 def get_document_tools() -> List[BaseTool]:
@@ -201,7 +190,7 @@ def get_document_tools() -> List[BaseTool]:
     skill_tool = create_skill_tool()
     if skill_tool:
         tools.append(skill_tool)
-    return tools
+    return _safe_list(tools)
 
 
 # ── 全量工具（兼容单 Agent 模式） ──────────────────────────
@@ -230,4 +219,4 @@ def get_all_tools() -> List[BaseTool]:
     tools.extend(get_mcp_tools())
 
     logger.info(f"Tools registered: {[t.name for t in tools]}")
-    return tools
+    return _safe_list(tools)

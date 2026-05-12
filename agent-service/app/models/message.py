@@ -5,20 +5,21 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Inde
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import Base
+from .types import JSONText
 
 
 class Message(Base):
     """消息表"""
     __tablename__ = "messages"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     message_id = Column(String(100), unique=True, index=True, nullable=False)  # UUID
     session_id = Column(String(100), ForeignKey("sessions.session_id"), nullable=False, index=True)
     role = Column(String(20), nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
-    extra_data = Column(Text)  # JSON string for additional metadata (renamed from metadata)
+    extra_data = Column(JSONText)  # dict/list, SQLAlchemy 自动 JSON 编解码
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    
+
     compacted_at = Column(DateTime, nullable=True, default=None)
     compact_group_id = Column(String(50), nullable=True)
 

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.agent.tools.file_tool import get_session_workspace
+from app.agent.tools._ctx import get_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -298,8 +299,8 @@ class BrowserUseTool(BaseTool):
 
     async def _execute(self, command: str) -> str:
         # 获取工作区目录（用于会话配置和 cwd）
-        if self.current_session_id:
-            workspace_dir = get_session_workspace(self.current_session_id)
+        if get_session_id():
+            workspace_dir = get_session_workspace(get_session_id())
         else:
             workspace_dir = Path(settings.WORKSPACE_ROOT).resolve()
             workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -329,7 +330,7 @@ class BrowserUseTool(BaseTool):
             )
 
         # 构建完整命令
-        session_name = f"session-{self.current_session_id or 'default'}"
+        session_name = f"session-{get_session_id() or 'default'}"
         cmd_str = f"browser-use --headed --session {session_name} {command}"
 
         logger.info(f"🖥️  Executing: {cmd_str}")

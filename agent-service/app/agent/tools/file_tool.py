@@ -19,6 +19,7 @@ from typing import Type, Optional
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from app.agent.tools._ctx import get_session_id
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class ReadFileTool(BaseTool):
 
     def _run(self, path: str) -> str:
         try:
-            p = resolve_path(path, self.current_session_id)
+            p = resolve_path(path, get_session_id())
             if not p.exists():
                 return f"Error: File not found: {path}"
             if not p.is_file():
@@ -318,7 +319,7 @@ class WriteFileTool(BaseTool):
 
     def _run(self, path: str, content: str) -> str:
         try:
-            p = resolve_path(path, self.current_session_id)
+            p = resolve_path(path, get_session_id())
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content, encoding="utf-8")
             logger.info(f"✏️  Wrote file: {p} ({len(content)} chars)")
@@ -353,7 +354,7 @@ class EditFileTool(BaseTool):
 
     def _run(self, path: str, old_string: str, new_string: str) -> str:
         try:
-            p = resolve_path(path, self.current_session_id)
+            p = resolve_path(path, get_session_id())
             if not p.exists():
                 return f"Error: File not found: {path}"
             if not p.is_file():
@@ -404,7 +405,7 @@ class ListDirTool(BaseTool):
 
     def _run(self, path: str = ".") -> str:
         try:
-            p = resolve_path(path, self.current_session_id)
+            p = resolve_path(path, get_session_id())
             if not p.exists():
                 return f"Directory is empty or not found: {path}"
             if not p.is_dir():

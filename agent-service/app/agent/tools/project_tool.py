@@ -15,6 +15,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.agent.tools._ctx import get_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class MaterializeProjectTool(BaseTool):
         description: Optional[str] = None,
         icon: Optional[str] = None,
     ) -> str:
-        if not self.current_session_id:
+        if not get_session_id():
             return "Error: session_id not set"
 
         if not slug or not _SLUG_PATTERN.match(slug):
@@ -78,7 +79,7 @@ class MaterializeProjectTool(BaseTool):
 
         with sync_session_factory() as db:
             result = db.execute(
-                select(Session).where(Session.session_id == self.current_session_id)
+                select(Session).where(Session.session_id == get_session_id())
             )
             session = result.scalars().first()
             if not session or not session.project_id:

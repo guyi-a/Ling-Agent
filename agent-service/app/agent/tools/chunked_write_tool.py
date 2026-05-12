@@ -23,6 +23,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from app.agent.tools.file_tool import resolve_path, get_session_workspace
+from app.agent.tools._ctx import get_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ class ChunkedWriteTool(BaseTool):
 
     def _get_session_dir(self) -> Path:
         """获取会话存储目录"""
-        workspace = get_session_workspace(self.current_session_id, ensure=True)
+        workspace = get_session_workspace(get_session_id(), ensure=True)
         session_dir = workspace / ".chunked_write_sessions"
         session_dir.mkdir(exist_ok=True)
         return session_dir
@@ -157,7 +158,7 @@ class ChunkedWriteTool(BaseTool):
         self._cleanup_expired_sessions()
 
         # 解析路径
-        file_path = resolve_path(path, self.current_session_id)
+        file_path = resolve_path(path, get_session_id())
         existed_before = file_path.exists()
 
         # 创建临时文件

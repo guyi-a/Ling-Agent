@@ -30,7 +30,7 @@ class MessageResponse(BaseModel):
     session_id: str
     role: str
     content: str
-    extra_data: Optional[str]
+    extra_data: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     class Config:

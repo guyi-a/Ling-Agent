@@ -253,9 +253,14 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 
 ### 后端
 - **框架**: FastAPI + LangGraph + LangChain
+- **请求处理**: Pipeline 架构，5 个独立 Stage 处理 parse / load / build / start / persist
+- **上下文追踪**: 中间件注入 `ContextVar`，工具层与日志自动带 session_id / user_id
+- **工具健壮性**: SafeToolset 包装所有工具，异常转 ToolException 回传 LLM 而非中断请求
+- **流式重连**: StreamBuffer 多订阅 + 历史 replay，支持网页刷新后断线续传
 - **多 Agent**: `langgraph_supervisor` — Supervisor + 5 专业子 Agent
 - **LLM**: 多 Provider 支持（DeepSeek / 通义千问 / 智谱），通过 `config/providers.json` 管理
-- **数据库**: SQLite + SQLAlchemy（异步）+ Alembic 迁移
+- **数据库**: SQLite + SQLAlchemy（异步）+ Alembic 迁移；启动时自动 `upgrade head`
+- **JSON 字段**: 自定义 `JSONText` TypeDecorator，ORM 读写自动 JSON 编解码，兼容老字符串数据
 - **认证**: JWT（Access Token + Refresh Token）
 - **流式**: SSE (Server-Sent Events)
 - **状态管理**: LangGraph Checkpointer (AsyncSqliteSaver，持久化到 `data/checkpoints.db`)
@@ -279,21 +284,25 @@ Ling-Agent/
 │   ├── app/
 │   │   ├── agent/
 │   │   │   ├── agents/         # 子 Agent 注册表（supervisor + 5 专业 Agent）
+│   │   │   ├── compaction/     # 长对话压缩
 │   │   │   ├── data/scales/    # 心理量表数据（GAD-7, PHQ-9, MBTI 等）
 │   │   │   ├── infra/          # LLM 工厂、Agent 工厂、Provider 路由、OCR
 │   │   │   ├── mcp/            # MCP 协议客户端（动态加载外部工具）
+│   │   │   ├── pipeline/       # 请求处理 Pipeline（parse / load / build / start / persist）
 │   │   │   ├── prompts/        # 各 Agent 系统提示词
 │   │   │   ├── rag/            # RAG 向量检索知识库
 │   │   │   ├── skills/         # 13 个专业技能
-│   │   │   ├── service/        # agent_service.py 核心流式服务
-│   │   │   └── tools/          # 工具集（文件、代码、网络、健康、开发、记忆、RAG、MCP）
-│   │   ├── core/               # 配置、依赖注入、审批逻辑、安全
+│   │   │   ├── service/        # 核心流式服务、StreamBuffer
+│   │   │   └── tools/          # 工具集 + SafeToolset 异常包装
+│   │   ├── core/               # 配置、依赖注入、审批、TraceContext 中间件
 │   │   ├── crud/               # 数据库 CRUD
-│   │   ├── models/             # SQLAlchemy 模型
+│   │   ├── database/           # 数据库连接、启动时 Alembic upgrade
+│   │   ├── models/             # SQLAlchemy 模型、JSONText TypeDecorator
 │   │   ├── routers/            # API 路由
 │   │   └── schemas/            # Pydantic 模型
 │   ├── config/                 # providers.json（多 LLM Provider 配置）
 │   ├── alembic/                # 数据库迁移
+│   ├── test/                   # pipeline / models / trace / safe_toolset 单测
 │   ├── workspace/              # 运行时工作区（每个 session 一个目录）
 │   └── main.py
 ├── web/                        # React 前端
