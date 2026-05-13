@@ -23,6 +23,8 @@ go.work
 .vscode/
 .idea/
 .claude/
+.cursor/
+.codeflicker/
 *.swp
 *.swo
 
